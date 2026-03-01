@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>SHAMO Admin — Games</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="_shared.css" />
+    <style>
+        .stat-row {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+
+        .stat-chip {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            padding: 10px 18px;
+            font-size: .78rem;
+            color: var(--muted);
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .stat-chip strong {
+            font-size: 1.3rem;
+            color: var(--text);
+            font-weight: 800;
+        }
+
+        .stat-chip.gold strong {
+            color: var(--gold);
+        }
+
+        .stat-chip.green strong {
+            color: var(--green);
+        }
+
+        .game-status-bar {
+            display: flex;
+            gap: 8px;
+            flex-wrap: wrap;
+            margin-bottom: 10px;
+            align-items: center;
+        }
+
+        .btn-green {
+            background: #22C55E;
+            color: #000;
+        }
+
+        .btn-green:hover {
+            background: #16a34a;
+        }
+
+        .btn-orange {
+            background: #F97316;
+            color: #000;
+        }
+
+        .btn-orange:hover {
+            background: #ea6c05;
+        }
+
+        .desc-cell {
+            max-width: 180px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--muted);
+            font-size: .72rem;
+        }
+
+        .prize-etb {
+            font-weight: 700;
+            color: var(--gold);
+        }
+    </style>
+</head>
+
+<body>
+    <div class="admin-layout">
+        <div id="sidebar" class="sidebar"></div>
+        <div class="main-area">
+            <div class="topbar">
+                <h1>Games <span class="subtitle">— Game Management</span></h1>
+                <div class="topbar-actions">
+                    <div class="search-input"><span>🔍</span><input type="text" id="searchG" placeholder="Search title…"
+                            oninput="debouncedLoad()" /></div>
+                    <select id="statusFilter" onchange="loadGames(1)">
+                        <option value="">All Status</option>
+                        <option value="active">Active</option>
+                        <option value="scheduled">Scheduled</option>
+                        <option value="draft">Draft</option>
+                        <option value="ended">Ended</option>
+                    </select>
+                    <button class="btn btn-primary" onclick="openCreateGame()">＋ New Game</button>
+                </div>
+            </div>
+
+            <div class="content">
+                <!-- Stats row -->
+                <div class="stat-row" id="gameStats">
+                    <div class="stat-chip gold"><strong id="sTotal">—</strong>Total Games</div>
+                    <div class="stat-chip green"><strong id="sActive">—</strong>Active Now</div>
+                    <div class="stat-chip"><strong id="sScheduled">—</strong>Scheduled</div>
+                    <div class="stat-chip"><strong id="sDraft">—</strong>Draft</div>
+                    <div class="stat-chip gold"><strong id="sPayout">—</strong>Total Paid Out (ETB)</div>
+                </div>
+
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Title</th>
+                            <th>Status</th>
+                            <th>Date / Time</th>
+                            <th>Prize Pool</th>
+                            <th>Remaining</th>
+                            <th>Players</th>
+                            <th>Paid Out</th>
+                            <th>Company</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="gamesBody">
+                        <tr>
+                            <td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="pagination" id="gPagination"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── Create / Edit Game Modal ─────────────────────────────── -->
+    <div class="modal-overlay" id="modalGame">
+        <div class="modal" style="max-width:620px;width:100%">
+            <div class="modal-header">
+                <h2 id="gameModalTitle">New Game</h2>
+                <button class="btn btn-ghost btn-icon" onclick="closeModal('modalGame')">✕</button>
+            </div>
+            <div class="modal-body">
+                <input type="hidden" id="gId" />
+
+                <div class="form-row">
+                    <div class="form-group" style="flex:2">
+                        <label>Game Title *</label>
+                        <input id="gTitle" type="text" placeholder="Tonight's SHAMO" />
+                    </div>
+                    <div class="form-group">
+                        <label>Status</label>
+                        <select id="gStatus">
+                            <option value="draft">Draft</option>
+                            <option value="scheduled">Scheduled</option>
+                            <option value="active">Active</option>
+                            <option value="ended">Ended</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Game Date *</label>
+                        <input id="gDate" type="date" />
+                    </div>
+                    <div class="form-group">
+                        <label>Starts At * <span style="font-size:.7rem;color:#E8B84B;font-weight:400">Ethiopian time (GMT+3)</span></label>
+                        <input id="gStarts" type="datetime-local" />
+                    </div>
+                    <div class="form-group">
+                        <label>Ends At * <span style="font-size:.7rem;color:#E8B84B;font-weight:400">Ethiopian time (GMT+3)</span></label>
+                        <input id="gEnds" type="datetime-local" />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Prize Pool (ETB)</label>
+                        <input id="gPool" type="number" step="50" min="0" value="500" />
+                    </div>
+                    <div class="form-group">
+                        <label>Max Prize (ETB)</label>
+                        <input id="gMaxPay" type="number" step="50" min="0" value="1000" />
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Platform Fee (%)</label>
+                        <input id="gFee" type="number" step="0.5" min="0" max="100" value="15" />
+                    </div>
+                    <div class="form-group">
+                        <label>Player Cap (%)</label>
+                        <input id="gCap" type="number" step="5" min="0" max="100" value="30" />
+                    </div>
+                    <div class="form-group">
+                        <label>Company (optional)</label>
+                        <select id="gCompany">
+                            <option value="">— Platform Game —</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label>Description</label>
+                    <textarea id="gDesc" rows="2" placeholder="Optional game description…"></textarea>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('modalGame')">Cancel</button>
+                <button class="btn btn-primary" id="gameSaveBtn" onclick="saveGame()">💾 Save Game</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ── View Game Detail Modal ─────────────────────────────── -->
+    <div class="modal-overlay" id="modalGameView">
+        <div class="modal" style="max-width:520px">
+            <div class="modal-header">
+                <h2 id="viewTitle">Game Details</h2>
+                <button class="btn btn-ghost btn-icon" onclick="closeModal('modalGameView')">✕</button>
+            </div>
+            <div class="modal-body" id="viewBody" style="font-size:.88rem;line-height:1.8"></div>
+            <div class="modal-footer">
+                <button class="btn btn-ghost" onclick="closeModal('modalGameView')">Close</button>
+                <button class="btn btn-primary" id="viewEditBtn">✏️ Edit</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/api/public/env.js"></script>
+  <script src="_shared.js"></script>
+    <script>
+        let gPage = 1;
+        let allCompanies = [];
+
+        buildSidebar('games');
+        requireAuth();
+
+        // ── Load companies for picker ───────────────────────────────
+        async function loadCompanies() {
+            try {
+                const r = await apiGet('/companies?per_page=100&status=active');
+                allCompanies = r.data || [];
+                const sel = document.getElementById('gCompany');
+                allCompanies.forEach(c => {
+                    const o = document.createElement('option');
+                    o.value = c.id; o.textContent = c.name;
+                    sel.appendChild(o);
+                });
+            } catch (e) { /* companies optional */ }
+        }
+
+        // ── Load & render games ─────────────────────────────────────
+        async function loadGames(page = gPage) {
+            gPage = page;
+            const tbody = document.getElementById('gamesBody');
+            tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td></tr>`;
+            try {
+                const search = document.getElementById('searchG').value;
+                const status = document.getElementById('statusFilter').value;
+                const r = await apiGet(`/games?page=${page}&per_page=15&search=${encodeURIComponent(search)}&status=${status}`);
+                const games = r.data || [];
+
+                // Update stat chips
+                document.getElementById('sTotal').textContent = fmtN(r.total || games.length);
+                document.getElementById('sActive').textContent = games.filter(g => g.status === 'active').length;
+                document.getElementById('sScheduled').textContent = games.filter(g => g.status === 'scheduled').length;
+                document.getElementById('sDraft').textContent = games.filter(g => g.status === 'draft').length;
+                const totalPayout = games.reduce((a, g) => a + parseFloat(g.total_paid_out || 0), 0);
+                document.getElementById('sPayout').textContent = fmtN(Math.round(totalPayout)) + ' ETB';
+
+                if (!games.length) {
+                    tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:3rem;color:var(--muted)">📭 No games found</td></tr>`;
+                    return;
+                }
+
+                tbody.innerHTML = games.map(g => `
+<tr class="game-row" style="cursor:pointer" onclick="toggleQuestions('${g.id}', this)">
+  <td>
+    <div style="font-weight:700;color:var(--gold)">${g.title || '—'}</div>
+    <div style="font-size:.68rem;color:var(--muted)">${fmtN(g.player_cap_pct || 0)}% player cap · fee ${g.platform_fee_pct || 0}%</div>
+  </td>
+  <td>${badge(g.status)}</td>
+  <td>
+    <div>${fmtDate(g.game_date)}</div>
+    <div style="font-size:.68rem;color:var(--muted)">${g.starts_at ? fmtTime(g.starts_at) : '—'}</div>
+  </td>
+  <td class="prize-etb">${fmtN(g.prize_pool_etb || 0)} ETB</td>
+  <td style="color:var(--green);font-weight:600">${fmtN(g.prize_pool_remaining || 0)} ETB</td>
+  <td>${fmtN(g.total_players || 0)}</td>
+  <td>${fmtN(g.total_paid_out || 0)} ETB</td>
+  <td style="font-size:.78rem">${g.company_name || '—'}</td>
+  <td onclick="event.stopPropagation()">
+    <div style="display:flex;gap:.3rem;flex-wrap:wrap;align-items:center">
+      <button class="btn btn-ghost btn-sm" title="Edit" onclick="editGame('${g.id}')">✏️ Edit</button>
+      ${g.status === 'draft' || g.status === 'scheduled' ? `<button class="btn btn-green btn-sm" onclick="activateGame('${g.id}')">▶ Go Live</button>` : ''}
+      ${g.status === 'active' ? `<button class="btn btn-orange btn-sm" onclick="endGame('${g.id}')">⏹ End</button>` : ''}
+      <button class="btn btn-red btn-sm" title="Delete" onclick="deleteGame('${g.id}')">🗑</button>
+    </div>
+  </td>
+</tr>
+<tr id="qs-${g.id}" style="display:none; background: rgba(0,0,0,0.15);">
+  <td colspan="9" style="padding: 0;">
+    <div style="padding: 16px; border-left: 3px solid var(--gold); margin: 8px 16px; background: var(--surface); border-radius: 8px;">
+      <div id="qs-content-${g.id}">⏳ Loading…</div>
+      <div id="qr-content-${g.id}" style="margin-top:16px;padding-top:12px;border-top:1px solid var(--border)"></div>
+    </div>
+  </td>
+</tr>`).join('');
+
+                renderPagination('gPagination', r.page, r.total, r.per_page, 'loadGames');
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">❌ ${e.message}</td></tr>`;
+            }
+        }
+
+        // ── Toggle Questions Panel ────────────────────────────────────
+        async function toggleQuestions(gid, rowEl) {
+            const qRow = document.getElementById(`qs-${gid}`);
+            const qContent = document.getElementById(`qs-content-${gid}`);
+            if (qRow.style.display === 'table-row') {
+                qRow.style.display = 'none';
+                rowEl.style.background = '';
+                return;
+            }
+
+            // Close others
+            document.querySelectorAll('tr[id^="qs-"]').forEach(tr => tr.style.display = 'none');
+            document.querySelectorAll('.game-row').forEach(tr => tr.style.background = '');
+
+            qRow.style.display = 'table-row';
+            rowEl.style.background = 'rgba(232,184,75,0.05)';
+
+            const qrContent = document.getElementById(`qr-content-${gid}`);
+            if (qrContent) qrContent.innerHTML = '⏳ Loading QR codes…';
+
+            try {
+                const [qs, qrList] = await Promise.all([
+                    apiGet(`/games/${gid}/questions`),
+                    apiGet(`/qr?game_id=${gid}`)
+                ]);
+                const qCount = Array.isArray(qs) ? qs.length : 0;
+                const qrs = Array.isArray(qrList) ? qrList : (qrList?.data || qrList || []);
+                const qrCount = qrs.filter(q => (q.status || 'active') === 'active').length;
+                const ready = qCount > 0 && qrCount > 0;
+                const readyHtml = `<div style="margin-bottom:14px;padding:10px 14px;border-radius:8px;background:${ready ? 'rgba(34,197,94,.1)' : 'rgba(249,115,22,.1)'};border:1px solid ${ready ? 'var(--green)' : 'var(--orange)'};font-size:.82rem;">
+                  ${ready ? '✓ Ready to go live' : '⚠ To go live'}: ${qCount} question(s), ${qrCount} active QR code(s). ${ready ? 'You can click "▶ Go Live" in the row above.' : 'Add at least one question and generate at least one QR code (QR Manager or create below).'}
+                </div>`;
+                if (!qs || !qs.length) {
+                    qContent.innerHTML = readyHtml + `<div style="text-align:center; padding: 20px; color: var(--muted);">📭 No questions added to this game yet.</div>`;
+                } else {
+                    qContent.innerHTML = readyHtml + `
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px;">
+            <h4 style="margin:0; color:var(--gold);">Game Questions (${qs.length})</h4>
+          </div>
+          <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px;">
+            ${qs.map((q, idx) => `
+              <div style="background: rgba(0,0,0,0.2); border: 1px solid var(--border); border-radius: 6px; padding: 12px;">
+                <div style="font-size:.75rem; color:var(--muted); margin-bottom:4px;">Q${idx + 1} · ${q.category || 'General'}</div>
+                <div style="font-weight:600; font-size:.9rem; margin-bottom:8px; line-height:1.4">${q.icon || '🇪🇹'} ${q.question_text}</div>
+                <div style="display:flex; flex-direction:column; gap:4px;">
+                  ${(q.options || []).map(o => `
+                    <div style="font-size:.8rem; padding: 4px 8px; border-radius: 4px; background: ${o.is_correct ? 'rgba(34,197,94,.15)' : 'transparent'}; border: 1px solid ${o.is_correct ? 'var(--green)' : 'transparent'}; color: ${o.is_correct ? 'var(--green)' : 'var(--muted)'}">
+                      <b>${o.option_letter}.</b> ${o.option_text}
+                    </div>
+                  `).join('')}
+                </div>
+              </div>
+            `).join('')}
+          </div>
+        `;
+                }
+
+                if (qrContent) {
+                    if (!qrs.length) {
+                        qrContent.innerHTML = `<div style="font-size:.8rem;color:var(--muted);">📷 No QR codes for this game. Create one in <a href="qr-manager.html" style="color:var(--gold)">QR Manager</a>.</div>`;
+                    } else {
+                        qrContent.innerHTML = `
+          <h4 style="margin:0 0 10px 0;color:var(--gold);font-size:.9rem">Generated QR codes (${qrs.length})</h4>
+          <div style="display:flex;flex-wrap:wrap;gap:10px;">
+            ${qrs.map(qr => `
+              <div style="background:rgba(0,0,0,.2);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:.75rem;">
+                <div style="color:var(--muted);margin-bottom:4px">${qr.label || 'QR'} · ${qr.status || 'active'} · ${qr.scan_count ?? 0} scans</div>
+                <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap">
+                  <code style="background:var(--p2);padding:4px 8px;border-radius:4px;word-break:break-all;max-width:220px">${qr.token || qr.id}</code>
+                  <button type="button" class="btn btn-ghost btn-sm" onclick="navigator.clipboard.writeText('${(qr.token || qr.id || '').replace(/'/g, "\\'")}');showToast('Copied!')">Copy</button>
+                  ${qr.qr_url ? `<a href="${qr.qr_url}" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">📷 Image</a>` : ''}
+                </div>
+              </div>
+            `).join('')}
+          </div>`;
+                    }
+                }
+            } catch (e) {
+                qContent.innerHTML = `<div style="color:var(--red);">❌ Failed to load: ${e.message}</div>`;
+                if (qrContent) qrContent.innerHTML = '';
+            }
+        }
+
+        // ── View game detail ─────────────────────────────────────────
+        async function viewGame(id) {
+            try {
+                const g = await apiGet(`/games/${id}`);
+                document.getElementById('viewTitle').textContent = g.title || 'Game';
+                document.getElementById('viewBody').innerHTML = `
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+            <div><strong>Status</strong><br>${badge(g.status)}</div>
+            <div><strong>Date</strong><br>${fmtDate(g.game_date)}</div>
+            <div><strong>Starts At</strong><br>${fmtTime(g.starts_at)}</div>
+            <div><strong>Ends At</strong><br>${fmtTime(g.ends_at)}</div>
+            <div><strong>Prize Pool</strong><br><span style="color:var(--gold);font-weight:700">${fmtN(g.prize_pool_etb)} ETB</span></div>
+            <div><strong>Remaining</strong><br><span style="color:var(--green)">${fmtN(g.prize_pool_remaining)} ETB</span></div>
+            <div><strong>Platform Fee</strong><br>${g.platform_fee_pct}%</div>
+            <div><strong>Player Cap</strong><br>${g.player_cap_pct}%</div>
+            <div><strong>Total Players</strong><br>${fmtN(g.total_players)}</div>
+            <div><strong>Total Winners</strong><br>${fmtN(g.total_winners)}</div>
+            <div><strong>Total Paid Out</strong><br>${fmtN(g.total_paid_out)} ETB</div>
+            <div><strong>Max Prize</strong><br>${fmtN(g.max_prize_etb)} ETB</div>
+          </div>
+          ${g.description ? `<div style="margin-top:12px;font-size:.82rem;color:var(--muted)">${g.description}</div>` : ''}
+        `;
+                document.getElementById('viewEditBtn').onclick = () => { closeModal('modalGameView'); editGame(id); };
+                openModal('modalGameView');
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        // ── Open create form ─────────────────────────────────────────
+        function openCreateGame() {
+            document.getElementById('gameModalTitle').textContent = '＋ New Game';
+            document.getElementById('gId').value = '';
+            document.getElementById('gTitle').value = '';
+            document.getElementById('gDesc').value = '';
+            document.getElementById('gPool').value = '500';
+            document.getElementById('gMaxPay').value = '1000';
+            document.getElementById('gFee').value = '15';
+            document.getElementById('gCap').value = '30';
+            document.getElementById('gStatus').value = 'draft';
+            document.getElementById('gCompany').value = '';
+
+            // Default date/time = today in Ethiopian time (GMT+3)
+            const todayEt = nowEtInput();                        // "YYYY-MM-DDTHH:MM"
+            const todayDate = todayEt.substring(0, 10);          // "YYYY-MM-DD"
+            document.getElementById('gDate').value = todayDate;
+            document.getElementById('gStarts').value = `${todayDate}T20:00`; // 8 PM ET
+            document.getElementById('gEnds').value   = `${todayDate}T23:59`; // midnight ET
+
+            openModal('modalGame');
+        }
+
+        // ── Open edit form ────────────────────────────────────────────
+        async function editGame(id) {
+            try {
+                const g = await apiGet(`/games/${id}`);
+                document.getElementById('gameModalTitle').textContent = '✏️ Edit Game';
+                document.getElementById('gId').value = g.id;
+                document.getElementById('gTitle').value = g.title || '';
+                document.getElementById('gStatus').value = g.status || 'draft';
+                // game_date is a plain date (no tz conversion needed)
+                document.getElementById('gDate').value = g.game_date?.substring(0, 10) || '';
+                // starts_at and ends_at are stored as UTC ISO — convert to Ethiopian time for the input
+                document.getElementById('gStarts').value = utcToEtInput(g.starts_at);
+                document.getElementById('gEnds').value   = utcToEtInput(g.ends_at);
+                document.getElementById('gPool').value = g.prize_pool_etb ?? 500;
+                document.getElementById('gMaxPay').value = g.max_prize_etb ?? 1000;
+                document.getElementById('gFee').value = g.platform_fee_pct ?? 15;
+                document.getElementById('gCap').value = g.player_cap_pct ?? 30;
+                document.getElementById('gCompany').value = g.company_id || '';
+                document.getElementById('gDesc').value = g.description || '';
+                openModal('modalGame');
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        // ── Save (create or update) ──────────────────────────────────
+        async function saveGame() {
+            const id = document.getElementById('gId').value.trim();
+            const title = document.getElementById('gTitle').value.trim();
+            if (!title) { showToast('Game title is required', 'error'); return; }
+
+            const gameDate = document.getElementById('gDate').value;
+            const startsAtLocal = document.getElementById('gStarts').value;
+            const endsAtLocal   = document.getElementById('gEnds').value;
+            if (!gameDate || !startsAtLocal || !endsAtLocal) {
+                showToast('Date, Start and End time are required', 'error'); return;
+            }
+
+            // Convert Ethiopia (GMT+3) inputs to UTC ISO before sending to API
+            const startsAt = etInputToUtc(startsAtLocal);
+            const endsAt   = etInputToUtc(endsAtLocal);
+
+            const payload = {
+                title,
+                status: document.getElementById('gStatus').value,
+                game_date: gameDate,
+                starts_at: startsAt,
+                ends_at: endsAt,
+                prize_pool_etb: parseFloat(document.getElementById('gPool').value) || 500,
+                max_prize_etb: parseFloat(document.getElementById('gMaxPay').value) || 1000,
+                platform_fee_pct: parseFloat(document.getElementById('gFee').value) || 15,
+                player_cap_pct: parseFloat(document.getElementById('gCap').value) || 30,
+                description: document.getElementById('gDesc').value || null,
+                company_id: document.getElementById('gCompany').value || null,
+            };
+
+            const btn = document.getElementById('gameSaveBtn');
+            btn.disabled = true; btn.textContent = 'Saving…';
+            try {
+                if (id) {
+                    await apiPut(`/games/${id}`, payload);
+                    showToast('Game updated ✅', 'success');
+                } else {
+                    await apiPost('/games', payload);
+                    showToast('Game created ✅', 'success');
+                }
+                closeModal('modalGame');
+                loadGames(gPage);
+            } catch (e) {
+                showToast('Error: ' + e.message, 'error');
+            } finally {
+                btn.disabled = false; btn.textContent = '💾 Save Game';
+            }
+        }
+
+        // ── Quick actions ─────────────────────────────────────────────
+        async function activateGame(id) {
+            if (!confirm('Set this game to ACTIVE? Players will see it as live (must have questions + QR codes).')) return;
+            try {
+                await apiPost(`/games/${id}/activate`);
+                showToast('Game is now LIVE ✅', 'success');
+                loadGames();
+            } catch (e) {
+                const msg = (e.detail && (typeof e.detail === 'string' ? e.detail : e.detail.detail || e.detail.message)) || e.message;
+                showToast(msg || 'Cannot go live', 'error');
+            }
+        }
+
+        async function endGame(id) {
+            if (!confirm('End this game now? This cannot be reversed.')) return;
+            try {
+                await apiPost(`/games/${id}/end`);
+                showToast('Game ended', 'info');
+                loadGames();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        async function deleteGame(id) {
+            if (!confirm('⚠️ Delete this game permanently? This cannot be undone.')) return;
+            try {
+                await apiDelete(`/games/${id}`);
+                showToast('Game deleted', 'info');
+                loadGames();
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        // ── Debounce search ───────────────────────────────────────────
+        let debT;
+        function debouncedLoad() { clearTimeout(debT); debT = setTimeout(() => loadGames(1), 350); }
+
+        // ── Boot ──────────────────────────────────────────────────────
+        loadCompanies();
+        loadGames(1);
+    </script>
+</body>
+
+</html>

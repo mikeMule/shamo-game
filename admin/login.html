@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>SHAMO Admin — Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <style>
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0
+    }
+
+    body {
+      min-height: 100vh;
+      background: #0B0D12;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Inter', sans-serif;
+      color: #F1F5F9
+    }
+
+    .card {
+      background: #1A1F2E;
+      border: 1px solid rgba(255, 255, 255, .08);
+      border-radius: 20px;
+      padding: 2.5rem;
+      width: 100%;
+      max-width: 400px;
+      box-shadow: 0 24px 80px rgba(0, 0, 0, .6)
+    }
+
+    .logo {
+      text-align: center;
+      margin-bottom: 2rem
+    }
+
+    .logo .icon {
+      font-size: 3rem;
+      margin-bottom: .5rem
+    }
+
+    .logo h1 {
+      font-size: 1.75rem;
+      font-weight: 900;
+      background: linear-gradient(135deg, #E8B84B, #F5C842);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent
+    }
+
+    .logo p {
+      font-size: .82rem;
+      color: #64748B;
+      margin-top: .25rem
+    }
+
+    .form-group {
+      margin-bottom: 1.25rem
+    }
+
+    .form-group label {
+      display: block;
+      font-size: .8rem;
+      font-weight: 600;
+      color: #94A3B8;
+      margin-bottom: .4rem;
+      text-transform: uppercase;
+      letter-spacing: .05em
+    }
+
+    .form-group input {
+      width: 100%;
+      background: #0B0D12;
+      border: 1.5px solid rgba(255, 255, 255, .1);
+      border-radius: 10px;
+      padding: .75rem 1rem;
+      color: #F1F5F9;
+      font-size: .9rem;
+      font-family: inherit;
+      outline: none;
+      transition: .2s
+    }
+
+    .form-group input:focus {
+      border-color: #E8B84B
+    }
+
+    .btn-login {
+      width: 100%;
+      background: linear-gradient(135deg, #E8B84B, #D4A017);
+      border: none;
+      border-radius: 10px;
+      padding: .85rem;
+      font-size: .95rem;
+      font-weight: 700;
+      color: #0B0D12;
+      cursor: pointer;
+      letter-spacing: .02em;
+      transition: .2s;
+      margin-top: .5rem
+    }
+
+    .btn-login:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 8px 24px rgba(232, 184, 75, .4)
+    }
+
+    .btn-login:disabled {
+      opacity: .6;
+      transform: none;
+      cursor: not-allowed
+    }
+
+    .error-msg {
+      background: rgba(239, 68, 68, .1);
+      border: 1px solid rgba(239, 68, 68, .3);
+      border-radius: 8px;
+      padding: .65rem 1rem;
+      font-size: .82rem;
+      color: #FCA5A5;
+      margin-bottom: 1rem;
+      display: none
+    }
+
+    .api-indicator {
+      text-align: center;
+      margin-top: 1.25rem;
+      font-size: .75rem;
+      color: #374151
+    }
+
+    .api-dot {
+      display: inline-block;
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #6B7280;
+      margin-right: .4rem;
+      transition: .3s
+    }
+
+    .api-dot.ok {
+      background: #22C55E
+    }
+
+    .api-dot.err {
+      background: #EF4444
+    }
+  </style>
+</head>
+
+<body>
+  <div class="card">
+    <div class="logo">
+      <div class="icon">🎡</div>
+      <h1>SHAMO Admin</h1>
+      <p>Secure administrator portal</p>
+    </div>
+    <div class="error-msg" id="errMsg"></div>
+    <div class="form-group"><label>Username</label><input id="username" type="text" placeholder="admin"
+        autocomplete="username" /></div>
+    <div class="form-group"><label>Password</label><input id="password" type="password" placeholder="••••••••"
+        autocomplete="current-password" /></div>
+    <button class="btn-login" id="loginBtn" onclick="doLogin()">Sign In →</button>
+    <div class="api-indicator"><span class="api-dot" id="apiDot"></span><span id="apiStatus">Checking API…</span></div>
+  </div>
+  <script src="/api/public/env.js"></script>
+  <script>
+    const API = (typeof window.SHAMO_API_BASE_URL === 'string' && window.SHAMO_API_BASE_URL)
+      ? (window.SHAMO_API_BASE_URL.replace(/\/$/, '') + '/api') : 'http://localhost:8001/api';
+    const TOKEN_KEY = 'shamo_admin_token';
+    const USER_KEY = 'shamo_admin_user';
+
+    // If already logged in, redirect
+    if (localStorage.getItem(TOKEN_KEY)) window.location.href = 'index.html';
+
+    // Check API health
+    (async function checkAPI() {
+      try {
+        const r = await fetch(API + '/health', { signal: AbortSignal.timeout(3000) });
+        const d = await r.json();
+        document.getElementById('apiDot').classList.add(d.db === 'connected' ? 'ok' : 'err');
+        document.getElementById('apiStatus').textContent = d.db === 'connected' ? 'API connected to Database' : 'API up — DB offline';
+      } catch {
+        document.getElementById('apiDot').classList.add('err');
+        document.getElementById('apiStatus').textContent = 'API offline — check API_BASE_URL in .env and start server';
+      }
+    })();
+
+    async function doLogin() {
+      const btn = document.getElementById('loginBtn');
+      const errEl = document.getElementById('errMsg');
+      const user = document.getElementById('username').value.trim();
+      const pass = document.getElementById('password').value;
+      if (!user || !pass) { showErr('Please enter username and password'); return; }
+      btn.disabled = true; btn.textContent = 'Signing in…';
+      errEl.style.display = 'none';
+      try {
+        const res = await fetch(API + '/auth/login', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ username: user, password: pass })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Login failed');
+        localStorage.setItem(TOKEN_KEY, data.token);
+        localStorage.setItem(USER_KEY, JSON.stringify({ username: data.username, role: data.role }));
+        window.location.href = 'index.html';
+      } catch (e) {
+        showErr(e.message);
+        btn.disabled = false; btn.textContent = 'Sign In →';
+      }
+    }
+
+    function showErr(msg) {
+      const el = document.getElementById('errMsg');
+      el.textContent = '❌ ' + msg; el.style.display = 'block';
+    }
+
+    document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+  </script>
+</body>
+
+</html>

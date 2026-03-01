@@ -1,0 +1,249 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>SHAMO Admin — Withdrawals</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .talabirr-badge { background: linear-gradient(135deg,#22C55E,#16A34A); color:#fff; padding:.2rem .5rem; border-radius:6px; font-size:.7rem; font-weight:700; }
+    .release-card { background: linear-gradient(135deg,rgba(34,197,94,.08),rgba(22,163,74,.05)); border:1px solid rgba(34,197,94,.25); border-radius:12px; padding:1rem 1.25rem; margin-bottom:1rem; }
+    .release-amount { font-size:1.5rem; font-weight:800; color:var(--gold); }
+    .release-phone { font-size:1.1rem; font-weight:600; color:var(--text); letter-spacing:.05em; }
+  </style>
+</head>
+
+<body>
+  <div class="admin-layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main-area">
+      <div class="topbar">
+        <h1>Withdrawals <span class="subtitle">— Release to Talabirr</span></h1>
+        <div class="topbar-actions">
+          <div class="search-input"><span>🔍</span><input type="text" id="searchW" placeholder="Name, phone, ref…"
+              oninput="debouncedLoad()" /></div>
+          <select id="wStatus" onchange="loadW(1)">
+            <option value="">All Status</option>
+            <option value="pending">Pending</option>
+            <option value="processing">Processing</option>
+            <option value="completed">Completed</option>
+            <option value="failed">Failed</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
+        </div>
+      </div>
+      <div class="content">
+        <div id="pendingAlert"></div>
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>User</th>
+              <th>Requested</th>
+              <th>Fee</th>
+              <th>Paid</th>
+              <th>Status</th>
+              <th>Talabirr Phone</th>
+              <th>Full Name</th>
+              <th>Date</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="wBody">
+            <tr>
+              <td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination" id="wPagination"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- View / Release Modal -->
+  <div class="modal-overlay" id="modalProcess">
+    <div class="modal" style="max-width:520px">
+      <div class="modal-header">
+        <h2 id="procTitle">Withdrawal Details</h2><button class="btn btn-ghost btn-icon"
+          onclick="closeModal('modalProcess')">✕</button>
+      </div>
+      <div class="modal-body" id="procBody"></div>
+      <div class="modal-footer" id="procFooter"></div>
+    </div>
+  </div>
+
+  <!-- Approve confirmation -->
+  <div class="modal-overlay" id="modalApprove">
+    <div class="modal" style="max-width:420px">
+      <div class="modal-header">
+        <h2>Release to Talabirr</h2><button class="btn btn-ghost btn-icon" onclick="closeModal('modalApprove')">✕</button>
+      </div>
+      <div class="modal-body" id="approveBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalApprove')">Cancel</button>
+        <button class="btn btn-green" id="approveConfirmBtn">✅ Release & Complete</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/api/public/env.js"></script>
+  <script src="_shared.js"></script>
+  <script>
+    let wPage = 1;
+    let wData = [];
+    buildSidebar('withdrawals');
+
+    async function loadW(page = wPage) {
+      wPage = page;
+      document.getElementById('wBody').innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td></tr>`;
+      try {
+        const search = document.getElementById('searchW').value;
+        const status = document.getElementById('wStatus').value;
+        const r = await apiGet(`/withdrawals?page=${page}&per_page=15&search=${encodeURIComponent(search)}&status=${status}`);
+        wData = r.data || [];
+
+        // Pending alert
+        if (!status || status === 'pending') {
+          const pr = await apiGet('/withdrawals?status=pending&per_page=1');
+          const el = document.getElementById('pendingAlert');
+          el.innerHTML = pr.total > 0
+            ? `<div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:12px;padding:.9rem 1.25rem;margin-bottom:1rem;display:flex;align-items:center;gap:1rem">
+             <span style="font-size:1.3rem">💸</span>
+             <span style="flex:1"><b>${pr.total} pending withdrawal${pr.total > 1 ? 's' : ''}</b> — approve to release to Talabirr</span>
+           </div>` : '';
+        }
+
+        if (!wData.length) { document.getElementById('wBody').innerHTML = `<tr><td colspan="9" style="text-align:center;padding:3rem;color:var(--muted)">No withdrawals found</td></tr>`; return; }
+        document.getElementById('wBody').innerHTML = wData.map(w => {
+          const phone = w.phone_number || w.user_phone || '—';
+          return `
+      <tr>
+        <td>
+          <div style="font-weight:600">${w.user_name || '—'}</div>
+          <div style="font-size:.72rem;color:var(--muted)">@${w.telegram_username || '—'}</div>
+        </td>
+        <td style="color:var(--muted)">${fmtN(w.amount_requested)} ETB</td>
+        <td style="color:var(--red)">-${fmtN(w.fee_etb)} <span style="font-size:.7rem;opacity:.8">(${w.fee_pct || 5}%)</span></td>
+        <td style="font-weight:700;color:var(--gold)">${fmtN(w.amount_paid)} ETB</td>
+        <td>${badge(w.status)}</td>
+        <td><span class="talabirr-badge">${phone}</span></td>
+        <td style="font-size:.8rem">${w.full_name || '—'}</td>
+        <td style="font-size:.75rem;color:var(--muted)">${fmtTime(w.requested_at)}</td>
+        <td>
+          <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="viewW('${w.id}')">👁</button>
+            ${w.status === 'pending' ? `<button class="btn btn-green btn-sm" onclick="showApproveConfirm('${w.id}')">✅ Release</button><button class="btn btn-red btn-sm" onclick="denyW('${w.id}')">✕ Deny</button>` : ''}
+            ${w.status === 'processing' ? `<button class="btn btn-blue btn-sm" onclick="completeW('${w.id}')">✔ Complete</button>` : ''}
+          </div>
+        </td>
+      </tr>`;
+        }).join('');
+        renderPagination('wPagination', r.page, r.total, r.per_page, 'loadW');
+      } catch (e) {
+        document.getElementById('wBody').innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">❌ ${e.message}</td></tr>`;
+      }
+    }
+
+    async function viewW(id) {
+      try {
+        const w = await apiGet(`/withdrawals/${id}`);
+        const phone = w.phone_number || w.user_phone || '—';
+        document.getElementById('procTitle').textContent = `Withdrawal — ${fmtN(w.amount_paid)} ETB`;
+        document.getElementById('procBody').innerHTML = `
+      ${w.status === 'pending' ? `
+      <div class="release-card">
+        <div style="font-size:.7rem;color:var(--muted);margin-bottom:.3rem">Release to Talabirr</div>
+        <div class="release-amount">${fmtN(w.amount_paid)} ETB</div>
+        <div class="release-phone">${phone}</div>
+      </div>` : ''}
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        ${[
+            ['User', w.user_name || '—'],
+            ['Full Name', w.full_name || '—'],
+            ['Talabirr Phone', `<span class="talabirr-badge">${phone}</span>`],
+            ['Requested', fmtN(w.amount_requested) + ' ETB'],
+            ['Commission', '-' + fmtN(w.fee_etb) + ' ETB (' + (w.fee_pct || 5) + '%)'],
+            ['Amount Paid', fmtN(w.amount_paid) + ' ETB'],
+            ['Status', badge(w.status)],
+            ['Requested', fmtTime(w.requested_at)],
+            ['Processed', fmtTime(w.processed_at) || '—'],
+            ['Notes', w.notes || '—'],
+            ['Fail Reason', w.failure_reason || '—'],
+          ].map(([k, v]) => `<div style="background:var(--surface);border-radius:8px;padding:.6rem">
+          <div style="font-size:.7rem;color:var(--muted);margin-bottom:.2rem">${k}</div>
+          <div style="font-size:.85rem;font-weight:600">${v}</div>
+        </div>`).join('')}
+      </div>`;
+        _viewW = w;
+        document.getElementById('procFooter').innerHTML = `
+      <button class="btn btn-ghost" onclick="closeModal('modalProcess')">Close</button>
+      ${w.status === 'pending' ? `<button class="btn btn-red" onclick="denyW('${w.id}');closeModal('modalProcess')">✕ Deny</button><button class="btn btn-green" onclick="closeModal('modalProcess');showApproveConfirm('${w.id}', _viewW)">✅ Release to Talabirr</button>` : ''}
+      ${w.status === 'processing' ? `<button class="btn btn-primary" onclick="completeW('${w.id}');closeModal('modalProcess')">✔ Mark Complete</button>` : ''}
+    `;
+        openModal('modalProcess');
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    let _approveWid = null;
+    let _viewW = null; // last viewed withdrawal (for approve from modal)
+    function showApproveConfirm(id, wOverride) {
+      const w = wOverride || wData.find(x => x.id === id) || {};
+      const phone = w.phone_number || w.user_phone || '—';
+      const amt = fmtN(w.amount_paid || 0);
+      _approveWid = id;
+      document.getElementById('approveBody').innerHTML = `
+        <div class="release-card">
+          <p style="margin-bottom:.5rem;color:var(--muted);font-size:.85rem">This will deduct balance and mark as completed. Cash will be released to:</p>
+          <div class="release-amount">${amt} ETB</div>
+          <div class="release-phone">${phone}</div>
+          <p style="margin-top:.75rem;font-size:.75rem;color:var(--muted)">${w.full_name ? 'Telebirr: ' + w.full_name + ' · ' : ''}${w.user_name || '—'}</p>
+        </div>`;
+      const btn = document.getElementById('approveConfirmBtn');
+      btn.onclick = async () => {
+        if (!_approveWid) return;
+        try {
+          await apiPost(`/withdrawals/${_approveWid}/approve`);
+          closeModal('modalApprove');
+          _approveWid = null;
+          showToast('Released to Talabirr ✅', 'success');
+          loadW();
+        } catch (e) {
+          showToast(e.message, 'error');
+        }
+      };
+      openModal('modalApprove');
+    }
+
+    async function denyW(id) {
+      const reason = prompt('Deny reason:') || 'Admin denied';
+      try { await apiPost(`/withdrawals/${id}/deny`, { reason }); showToast('Withdrawal denied', 'info'); loadW(); }
+      catch (e) { showToast(e.message, 'error'); }
+    }
+
+    async function completeW(id) {
+      try { await apiPost(`/withdrawals/${id}/complete`); showToast('Marked as completed ✅', 'success'); loadW(); }
+      catch (e) { showToast(e.message, 'error'); }
+    }
+
+    function exportCSV() {
+      if (!wData.length) { showToast('No data to export', 'error'); return; }
+      const headers = ['id', 'user_name', 'full_name', 'amount_requested', 'fee_etb', 'amount_paid', 'status', 'phone_number', 'requested_at'];
+      const rows = wData.map(w => headers.map(h => `"${(w[h] || '').toString().replace(/"/g, '""')}"`).join(','));
+      const csv = [headers.join(','), ...rows].join('\n');
+      const a = document.createElement('a');
+      a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+      a.download = `withdrawals_${new Date().toISOString().slice(0, 10)}.csv`;
+      a.click();
+      showToast('CSV exported', 'success');
+    }
+
+    let debT;
+    function debouncedLoad() { clearTimeout(debT); debT = setTimeout(() => loadW(1), 350); }
+
+    loadW(1);
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>SHAMO Admin — Companies</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .co-stats { display: grid; grid-template-columns: repeat(4,1fr); gap: 12px; margin-bottom: 20px; }
+    .co-stat { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 18px; }
+    .co-stat-val { font-size: 1.6rem; font-weight: 800; line-height: 1; }
+    .co-stat-lbl { font-size: .68rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin-top: 4px; }
+
+    .co-logo { width: 40px; height: 40px; border-radius: 8px; object-fit: contain; background: #fff; border: 1px solid var(--border); flex-shrink: 0; }
+    .co-init { width: 40px; height: 40px; border-radius: 8px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1rem; flex-shrink: 0; border: 1px solid var(--border); }
+
+    .co-name-cell { display: flex; align-items: center; gap: 10px; min-width: 0; }
+    .co-name { font-weight: 700; font-size: .88rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .co-slug { font-size: .68rem; color: var(--muted); }
+
+    .co-color-dot { width: 14px; height: 14px; border-radius: 4px; border: 1px solid var(--border); display: inline-block; vertical-align: middle; }
+
+    /* Detail modal */
+    .co-detail-header { display: flex; align-items: center; gap: 16px; margin-bottom: 18px; }
+    .co-detail-logo { width: 64px; height: 64px; border-radius: 12px; object-fit: contain; background: #fff; border: 1px solid var(--border); }
+    .co-detail-init { width: 64px; height: 64px; border-radius: 12px; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 1.5rem; border: 1px solid var(--border); }
+    .co-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 16px; }
+    .co-detail-item { background: var(--surface); border-radius: 8px; padding: 8px 12px; }
+    .co-detail-item .label { font-size: .65rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+    .co-detail-item .value { font-weight: 600; font-size: .88rem; margin-top: 2px; word-break: break-all; }
+    .co-detail-full { grid-column: 1 / -1; }
+    .co-detail-actions { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 14px; padding-top: 14px; border-top: 1px solid var(--border); }
+
+    .logo-preview-wrap { display: flex; align-items: center; gap: 12px; margin-top: 6px; min-height: 42px; }
+    .logo-preview-img { width: 48px; height: 48px; border-radius: 8px; object-fit: contain; background: #fff; border: 1px solid var(--border); }
+  </style>
+</head>
+
+<body>
+  <div class="admin-layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main-area">
+      <div class="topbar">
+        <h1>🏢 Companies <span class="subtitle">— Sponsor Partners</span></h1>
+        <div class="topbar-actions">
+          <div class="search-input"><span>🔍</span><input type="text" id="searchC" placeholder="Search companies…" oninput="debouncedLoad()" /></div>
+          <select id="cStatus" onchange="loadC(1)">
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="pending">Pending</option>
+            <option value="suspended">Suspended</option>
+          </select>
+          <button class="btn btn-primary" onclick="openAdd()">＋ Add Company</button>
+        </div>
+      </div>
+      <div class="content">
+
+        <!-- Alert -->
+        <div id="pendingCompAlert"></div>
+
+        <!-- Stats -->
+        <div class="co-stats">
+          <div class="co-stat"><div class="co-stat-val" id="stTotal" style="color:var(--gold)">0</div><div class="co-stat-lbl">Total</div></div>
+          <div class="co-stat"><div class="co-stat-val" id="stActive" style="color:var(--green)">0</div><div class="co-stat-lbl">Active</div></div>
+          <div class="co-stat"><div class="co-stat-val" id="stPending" style="color:#3B82F6">0</div><div class="co-stat-lbl">Pending</div></div>
+          <div class="co-stat"><div class="co-stat-val" id="stSuspended" style="color:var(--red)">0</div><div class="co-stat-lbl">Suspended</div></div>
+        </div>
+
+        <!-- Table -->
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Company</th>
+              <th>Category</th>
+              <th>Status</th>
+              <th>Credits</th>
+              <th>Total Spent</th>
+              <th>Contact</th>
+              <th>Color</th>
+              <th>Created</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="compBody">
+            <tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td></tr>
+          </tbody>
+        </table>
+        <div class="pagination" id="cPagination" style="margin-top:.75rem"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Add/Edit Company Modal ═══ -->
+  <div class="modal-overlay" id="modalComp">
+    <div class="modal" style="max-width:580px;width:100%">
+      <div class="modal-header">
+        <h2 id="compModalTitle">Add Company</h2>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('modalComp')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="cId" />
+        <div class="form-row">
+          <div class="form-group" style="flex:2"><label>Company Name *</label><input id="cName" type="text" placeholder="Tomoca Coffee" oninput="autoSlug()" /></div>
+          <div class="form-group"><label>Slug</label><input id="cSlug" type="text" placeholder="auto-generated" style="color:var(--muted)" /></div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Category</label>
+            <select id="cCat">
+              <option>Food & Beverage</option><option>Telecom</option><option>Finance</option>
+              <option>Retail</option><option>Technology</option><option>Media</option>
+              <option>Entertainment</option><option>Education</option><option>Healthcare</option>
+              <option>Transport</option><option>Real Estate</option><option>Other</option>
+            </select>
+          </div>
+          <div class="form-group"><label>Status</label>
+            <select id="cStat">
+              <option value="pending">Pending</option>
+              <option value="active">Active</option>
+              <option value="suspended">Suspended</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Logo URL</label>
+          <input id="cLogo" type="url" placeholder="https://example.com/logo.png" oninput="previewLogo()" />
+          <div class="logo-preview-wrap" id="logoPreviewWrap">
+            <span style="font-size:.75rem;color:var(--muted)">Paste a URL to preview</span>
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group"><label>Contact Email</label><input id="cEmail" type="email" placeholder="info@company.et" /></div>
+          <div class="form-group"><label>Phone</label><input id="cPhone" type="text" placeholder="+251911…" /></div>
+        </div>
+        <div class="form-group"><label>Website</label><input id="cWeb" type="url" placeholder="https://company.et" /></div>
+        <div class="form-group"><label>Description</label><textarea id="cDesc" rows="2" placeholder="Brief description of the company…"></textarea></div>
+        <div class="form-group"><label>Brand Color</label><input id="cColor1" type="color" value="#E8B84B" style="width:60px;height:36px;padding:2px;cursor:pointer" /></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalComp')">Cancel</button>
+        <button class="btn btn-primary" id="compSaveBtn" onclick="saveComp()">💾 Save Company</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Company Detail Modal ═══ -->
+  <div class="modal-overlay" id="modalDetail">
+    <div class="modal" style="max-width:520px;width:100%">
+      <div class="modal-header">
+        <h2 id="detailTitle">Company Details</h2>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('modalDetail')">✕</button>
+      </div>
+      <div class="modal-body" id="detailBody"></div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalDetail')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══ Top Up Modal ═══ -->
+  <div class="modal-overlay" id="modalTopUp">
+    <div class="modal" style="max-width:380px">
+      <div class="modal-header">
+        <h2 id="topUpTitle">💰 Top Up Credits</h2>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('modalTopUp')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="tuId" />
+        <div class="form-group"><label>Amount (ETB)</label><input id="tuAmt" type="number" step="50" min="0" placeholder="500" /></div>
+        <div class="form-group"><label>Note (optional)</label><textarea id="tuNote" rows="2" placeholder="Payment reference…"></textarea></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalTopUp')">Cancel</button>
+        <button class="btn btn-primary" id="tuBtn" onclick="applyTopUp()">💰 Add Credits</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/api/public/env.js"></script>
+  <script src="_shared.js"></script>
+  <script>
+    let cPage = 1;
+    buildSidebar('companies');
+
+    // ═══ LOAD ═══
+    async function loadC(page = cPage) {
+      cPage = page;
+      const tbody = document.getElementById('compBody');
+      tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td></tr>`;
+      try {
+        const search = document.getElementById('searchC').value;
+        const status = document.getElementById('cStatus').value;
+        const r = await apiGet(`/companies?page=${page}&per_page=12&search=${encodeURIComponent(search)}&status=${status}`);
+        const cards = r.data || [];
+
+        // Stats
+        const all = r.total || cards.length;
+        const active = cards.filter(c => c.status === 'active').length;
+        const pending = cards.filter(c => c.status === 'pending').length;
+        const suspended = cards.filter(c => c.status === 'suspended').length;
+        document.getElementById('stTotal').textContent = fmtN(all);
+        document.getElementById('stActive').textContent = active;
+        document.getElementById('stPending').textContent = pending;
+        document.getElementById('stSuspended').textContent = suspended;
+
+        // Pending alert
+        const pr = await apiGet('/companies?status=pending&per_page=1').catch(() => ({ total: 0 }));
+        document.getElementById('pendingCompAlert').innerHTML = (pr.total || 0) > 0
+          ? `<div style="background:rgba(59,130,246,.08);border:1px solid rgba(59,130,246,.25);border-radius:10px;padding:.75rem 1rem;margin-bottom:14px;display:flex;align-items:center;gap:.75rem;font-size:.88rem">
+              <span style="font-size:1.2rem">🔔</span>
+              <span><b>${pr.total}</b> company application${pr.total > 1 ? 's' : ''} awaiting verification</span>
+              <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="document.getElementById('cStatus').value='pending';loadC(1)">Review</button>
+            </div>` : '';
+
+        if (!cards.length) {
+          tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:3rem;color:var(--muted)">📭 No companies found</td></tr>`;
+          return;
+        }
+
+        tbody.innerHTML = cards.map(c => {
+          const logoHtml = c.logo_url
+            ? `<img src="${c.logo_url}" class="co-logo" alt="" onerror="this.outerHTML=initHtml('${esc(c.name)}','${c.primary_color||'#E8B84B'}')">`
+            : initHtml(c.name, c.primary_color || '#E8B84B');
+          return `<tr style="cursor:pointer" onclick="viewCompany('${c.id}')">
+            <td><div class="co-name-cell">${logoHtml}<div><div class="co-name">${esc(c.name)}</div><div class="co-slug">${esc(c.slug)}</div></div></div></td>
+            <td style="font-size:.78rem;color:var(--muted)">${c.category || '—'}</td>
+            <td>${badge(c.status)}</td>
+            <td style="font-weight:700;color:var(--gold)">${fmtEtb(c.credit_balance)}</td>
+            <td style="font-size:.82rem">${fmtEtb(c.total_spent)}</td>
+            <td style="font-size:.75rem;color:var(--muted)">${c.contact_email || '—'}</td>
+            <td><span class="co-color-dot" style="background:${c.primary_color || '#E8B84B'}"></span></td>
+            <td style="font-size:.75rem;color:var(--muted)">${fmtDate(c.created_at)}</td>
+            <td onclick="event.stopPropagation()">
+              <div style="display:flex;gap:4px;flex-wrap:wrap">
+                <button class="btn btn-ghost btn-sm" onclick="editC('${c.id}')" title="Edit">✏️</button>
+                ${c.status === 'pending' ? `<button class="btn btn-green btn-sm" onclick="verifyC('${c.id}')" title="Verify">✅</button>` : ''}
+                ${c.status === 'active' ? `<button class="btn btn-red btn-sm" onclick="suspendC('${c.id}')" title="Suspend">⏸</button>` : ''}
+                ${c.status === 'suspended' ? `<button class="btn btn-green btn-sm" onclick="verifyC('${c.id}')" title="Reactivate">▶</button>` : ''}
+                <button class="btn btn-ghost btn-sm" onclick="openTopUp('${c.id}','${esc(c.name)}')" title="Top Up">💰</button>
+                <button class="btn btn-red btn-sm" onclick="deleteC('${c.id}')" title="Delete">🗑</button>
+              </div>
+            </td>
+          </tr>`;
+        }).join('');
+        renderPagination('cPagination', r.page, r.total, r.per_page, 'loadC');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="9" style="text-align:center;padding:2rem;color:var(--muted)">❌ ${e.message}</td></tr>`;
+      }
+    }
+
+    function esc(s) { return (s || '').replace(/</g, '&lt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;'); }
+    function initHtml(name, color) {
+      return `<div class="co-init" style="background:${color}18;color:${color}">${(name||'?')[0].toUpperCase()}</div>`;
+    }
+
+    // ═══ VIEW DETAIL ═══
+    async function viewCompany(id) {
+      try {
+        const c = await apiGet(`/companies/${id}`);
+        document.getElementById('detailTitle').textContent = c.name;
+        const logoHtml = c.logo_url
+          ? `<img src="${c.logo_url}" class="co-detail-logo" alt="${esc(c.name)}" onerror="this.outerHTML='<div class=co-detail-init style=background:${c.primary_color||'#E8B84B'}18;color:${c.primary_color||'#E8B84B'}>${(c.name||'?')[0]}</div>'">`
+          : `<div class="co-detail-init" style="background:${c.primary_color||'#E8B84B'}18;color:${c.primary_color||'#E8B84B'}">${(c.name||'?')[0]}</div>`;
+        document.getElementById('detailBody').innerHTML = `
+          <div class="co-detail-header">
+            ${logoHtml}
+            <div>
+              <div style="font-size:1.15rem;font-weight:800">${esc(c.name)}</div>
+              <div style="font-size:.78rem;color:var(--muted)">${esc(c.slug)} · ${c.category || '—'}</div>
+              <div style="margin-top:4px">${badge(c.status)}</div>
+            </div>
+          </div>
+          <div class="co-detail-grid">
+            <div class="co-detail-item"><div class="label">Credits</div><div class="value" style="color:var(--gold)">${fmtEtb(c.credit_balance)}</div></div>
+            <div class="co-detail-item"><div class="label">Total Spent</div><div class="value">${fmtEtb(c.total_spent)}</div></div>
+            <div class="co-detail-item"><div class="label">Contact Email</div><div class="value">${c.contact_email || '—'}</div></div>
+            <div class="co-detail-item"><div class="label">Phone</div><div class="value">${c.contact_phone || '—'}</div></div>
+            <div class="co-detail-item"><div class="label">Website</div><div class="value">${c.website ? `<a href="${c.website}" target="_blank" style="color:var(--gold)">${c.website}</a>` : '—'}</div></div>
+            <div class="co-detail-item"><div class="label">Brand Color</div><div class="value"><span class="co-color-dot" style="background:${c.primary_color||'#E8B84B'};margin-right:6px"></span>${c.primary_color||'#E8B84B'}</div></div>
+            ${c.description ? `<div class="co-detail-item co-detail-full"><div class="label">Description</div><div class="value" style="font-weight:400;font-size:.82rem;line-height:1.5">${esc(c.description)}</div></div>` : ''}
+            ${c.logo_url ? `<div class="co-detail-item co-detail-full"><div class="label">Logo URL</div><div class="value" style="font-size:.72rem;font-weight:400">${c.logo_url}</div></div>` : ''}
+            <div class="co-detail-item"><div class="label">Created</div><div class="value" style="font-size:.78rem">${fmtTime(c.created_at)}</div></div>
+            <div class="co-detail-item"><div class="label">${c.verified_at ? '✅ Verified' : 'Not verified'}</div><div class="value" style="font-size:.78rem">${c.verified_at ? fmtTime(c.verified_at) : '—'}</div></div>
+          </div>
+          <div class="co-detail-actions">
+            <button class="btn btn-primary btn-sm" onclick="closeModal('modalDetail');editC('${c.id}')">✏️ Edit</button>
+            <button class="btn btn-ghost btn-sm" onclick="closeModal('modalDetail');openTopUp('${c.id}','${esc(c.name)}')">💰 Top Up</button>
+            <a class="btn btn-ghost btn-sm" href="qr-manager.html?company=${c.id}" style="text-decoration:none">📲 Generate QR</a>
+            ${c.status === 'pending' ? `<button class="btn btn-green btn-sm" onclick="verifyC('${c.id}');closeModal('modalDetail')">✅ Verify</button>` : ''}
+            ${c.status === 'active' ? `<button class="btn btn-red btn-sm" onclick="suspendC('${c.id}');closeModal('modalDetail')">⏸ Suspend</button>` : ''}
+            ${c.status === 'suspended' ? `<button class="btn btn-green btn-sm" onclick="verifyC('${c.id}');closeModal('modalDetail')">▶ Reactivate</button>` : ''}
+            <button class="btn btn-red btn-sm" onclick="deleteC('${c.id}');closeModal('modalDetail')" style="margin-left:auto">🗑 Delete</button>
+          </div>`;
+        openModal('modalDetail');
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    // ═══ LOGO PREVIEW ═══
+    function previewLogo() {
+      const url = (document.getElementById('cLogo').value || '').trim();
+      const wrap = document.getElementById('logoPreviewWrap');
+      if (url) {
+        wrap.innerHTML = `<img src="${url}" class="logo-preview-img" alt="Preview" onerror="this.outerHTML='<span style=font-size:.75rem;color:var(--red)>❌ Invalid URL</span>'">
+          <span style="font-size:.72rem;color:var(--green)">✓ Logo loaded</span>`;
+      } else {
+        wrap.innerHTML = '<span style="font-size:.75rem;color:var(--muted)">Paste a URL to preview</span>';
+      }
+    }
+
+    function autoSlug() {
+      const id = document.getElementById('cId').value;
+      if (id) return;
+      const name = document.getElementById('cName').value;
+      document.getElementById('cSlug').value = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+    }
+
+    // ═══ ADD / EDIT ═══
+    function openAdd() {
+      document.getElementById('compModalTitle').textContent = '＋ Add Company';
+      document.getElementById('cId').value = '';
+      ['cName','cSlug','cEmail','cPhone','cWeb','cDesc','cLogo'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('cStat').value = 'pending';
+      document.getElementById('cCat').value = 'Other';
+      document.getElementById('cColor1').value = '#E8B84B';
+      document.getElementById('logoPreviewWrap').innerHTML = '<span style="font-size:.75rem;color:var(--muted)">Paste a URL to preview</span>';
+      openModal('modalComp');
+    }
+
+    async function editC(id) {
+      try {
+        const c = await apiGet(`/companies/${id}`);
+        document.getElementById('compModalTitle').textContent = '✏️ Edit — ' + c.name;
+        document.getElementById('cId').value = c.id;
+        document.getElementById('cName').value = c.name || '';
+        document.getElementById('cSlug').value = c.slug || '';
+        document.getElementById('cEmail').value = c.contact_email || '';
+        document.getElementById('cPhone').value = c.contact_phone || '';
+        document.getElementById('cWeb').value = c.website || '';
+        document.getElementById('cLogo').value = c.logo_url || '';
+        document.getElementById('cDesc').value = c.description || '';
+        document.getElementById('cStat').value = c.status || 'pending';
+        document.getElementById('cCat').value = c.category || 'Other';
+        if (c.primary_color) document.getElementById('cColor1').value = c.primary_color;
+        previewLogo();
+        openModal('modalComp');
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    async function saveComp() {
+      const id = document.getElementById('cId').value;
+      const name = document.getElementById('cName').value.trim();
+      if (!name) { showToast('Company name is required', 'error'); return; }
+      const slug = document.getElementById('cSlug').value.trim() || name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/^-|-$/g,'');
+      const logoVal = document.getElementById('cLogo').value.trim();
+      const payload = {
+        name, slug,
+        category: document.getElementById('cCat').value,
+        contact_email: document.getElementById('cEmail').value || null,
+        contact_phone: document.getElementById('cPhone').value || null,
+        website: document.getElementById('cWeb').value || null,
+        logo_url: logoVal || null,
+        description: document.getElementById('cDesc').value || null,
+        status: document.getElementById('cStat').value,
+        primary_color: document.getElementById('cColor1').value || '#E8B84B',
+      };
+      // For update: always send logo_url and primary_color (even as null = clear)
+      if (id) {
+        payload.logo_url = logoVal || null;
+        payload.primary_color = document.getElementById('cColor1').value || '#E8B84B';
+      }
+      const btn = document.getElementById('compSaveBtn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        if (id) await apiPut(`/companies/${id}`, payload);
+        else await apiPost('/companies', payload);
+        showToast(id ? 'Company updated ✅' : 'Company created ✅', 'success');
+        closeModal('modalComp'); loadC(cPage);
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+      finally { btn.disabled = false; btn.textContent = '💾 Save Company'; }
+    }
+
+    // ═══ ACTIONS ═══
+    async function verifyC(id) {
+      try { await apiPost(`/companies/${id}/verify`); showToast('Company verified ✅', 'success'); loadC(); }
+      catch (e) { showToast(e.message, 'error'); }
+    }
+
+    async function suspendC(id) {
+      if (!confirm('Suspend this company? They won\'t be able to sponsor games.')) return;
+      try { await apiPost(`/companies/${id}/suspend`); showToast('Company suspended', 'info'); loadC(); }
+      catch (e) { showToast(e.message, 'error'); }
+    }
+
+    async function deleteC(id) {
+      if (!confirm('⚠️ Delete this company permanently? All QR codes, deposits, and games linked to it will be affected. This cannot be undone.')) return;
+      try { await apiDelete(`/companies/${id}`); showToast('Company deleted', 'info'); loadC(); }
+      catch (e) { showToast(e.message, 'error'); }
+    }
+
+    // ═══ TOP UP ═══
+    function openTopUp(id, name) {
+      document.getElementById('tuId').value = id;
+      document.getElementById('topUpTitle').textContent = '💰 Top Up — ' + name;
+      document.getElementById('tuAmt').value = '';
+      document.getElementById('tuNote').value = '';
+      openModal('modalTopUp');
+    }
+
+    async function applyTopUp() {
+      const id = document.getElementById('tuId').value;
+      const amt = parseFloat(document.getElementById('tuAmt').value);
+      const note = document.getElementById('tuNote').value;
+      if (!amt || amt <= 0) { showToast('Enter a valid amount', 'error'); return; }
+      const btn = document.getElementById('tuBtn');
+      btn.disabled = true; btn.textContent = 'Adding…';
+      try {
+        await apiPost(`/companies/${id}/topup`, { amount: amt, note });
+        showToast(`+${fmtN(amt)} ETB credits added ✅`, 'success');
+        closeModal('modalTopUp'); loadC();
+      } catch (e) { showToast(e.message, 'error'); }
+      finally { btn.disabled = false; btn.textContent = '💰 Add Credits'; }
+    }
+
+    // ═══ UTILS ═══
+    let debT;
+    function debouncedLoad() { clearTimeout(debT); debT = setTimeout(() => loadC(1), 350); }
+
+    loadC(1);
+  </script>
+</body>
+
+</html>

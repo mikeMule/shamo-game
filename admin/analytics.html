@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>SHAMO Admin — Analytics</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .kpi-row {
+      display: flex;
+      gap: 1rem;
+      margin-bottom: 1.25rem;
+      flex-wrap: wrap
+    }
+
+    .kpi-card {
+      flex: 1;
+      min-width: 120px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 1rem;
+      text-align: center
+    }
+
+    .kpi-val {
+      font-size: 1.4rem;
+      font-weight: 800
+    }
+
+    .kpi-lbl {
+      font-size: .72rem;
+      color: var(--muted);
+      margin-top: .2rem
+    }
+
+    .sparkline {
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+      height: 64px
+    }
+
+    .spark-bar {
+      flex: 1;
+      border-radius: 3px 3px 0 0;
+      min-height: 4px;
+      opacity: .8
+    }
+
+    .chart-row {
+      display: flex;
+      align-items: center;
+      gap: .75rem;
+      margin-bottom: .5rem
+    }
+
+    .chart-lbl {
+      font-size: .75rem;
+      color: var(--muted);
+      width: 90px;
+      flex-shrink: 0;
+      text-align: right;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap
+    }
+
+    .chart-track {
+      flex: 1;
+      height: 20px;
+      background: var(--surface);
+      border-radius: 6px;
+      overflow: hidden
+    }
+
+    .chart-fill {
+      height: 100%;
+      border-radius: 6px;
+      font-size: .7rem;
+      font-weight: 600;
+      color: #fff;
+      display: flex;
+      align-items: center;
+      padding-left: .4rem;
+      transition: width 1s ease
+    }
+
+    .chart-val {
+      font-size: .75rem;
+      color: var(--muted);
+      width: 55px;
+      flex-shrink: 0
+    }
+  </style>
+</head>
+
+<body>
+  <div class="admin-layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main-area">
+      <div class="topbar">
+        <h1>Analytics <span class="subtitle">— Platform Insights</span></h1>
+        <div class="topbar-actions">
+          <select id="daysFilter" onchange="loadAnalytics()">
+            <option value="7">Last 7 Days</option>
+            <option value="30" selected>Last 30 Days</option>
+            <option value="90">Last 90 Days</option>
+          </select>
+          <button class="btn btn-ghost btn-sm" onclick="loadAnalytics()">🔄 Refresh</button>
+        </div>
+      </div>
+      <div class="content" id="analyticsContent">
+        <div style="text-align:center;padding:4rem;color:var(--muted)">⏳ Loading analytics…</div>
+      </div>
+    </div>
+  </div>
+  <script src="/api/public/env.js"></script>
+  <script src="_shared.js"></script>
+  <script>
+    buildSidebar('analytics');
+
+    async function loadAnalytics() {
+      const days = document.getElementById('daysFilter').value;
+      const el = document.getElementById('analyticsContent');
+      el.innerHTML = `<div style="text-align:center;padding:4rem;color:var(--muted)">⏳ Loading analytics…</div>`;
+      try {
+        const d = await apiGet(`/analytics?days=${days}`);
+        const h = d.health || {};
+        const ls = d.level_stats || {};
+        const total_sessions = ls.total_sessions || 1;
+        const lvl = [
+          { label: 'Level 1 (Easy)', val: ls.level1_completions || 0, rate: Math.round((ls.level1_completions || 0) / total_sessions * 100), color: 'linear-gradient(90deg,#22C55E,#4ADE80)' },
+          { label: 'Level 2 (Medium)', val: ls.level2_completions || 0, rate: Math.round((ls.level2_completions || 0) / total_sessions * 100), color: 'linear-gradient(90deg,#E8B84B,#F5C842)' },
+          { label: 'Level 3 (Hard)', val: ls.level3_completions || 0, rate: Math.round((ls.level3_completions || 0) / total_sessions * 100), color: 'linear-gradient(90deg,#EF4444,#FCA5A5)' },
+        ];
+        const maxUserGrowth = Math.max(...(d.user_growth || []).map(r => r.count), 1);
+        const maxPayout = Math.max(...(d.payout_trend || []).map(r => r.amount), 1);
+        const maxEarner = Math.max(...(d.top_earners || []).map(u => u.total_earned), 1);
+        const maxSpend = Math.max(...(d.company_spend || []).map(c => c.total_spent), 1);
+        const maxAccPct = 100;
+
+        el.innerHTML = `
+      <!-- KPIs -->
+      <div class="kpi-row">
+        ${[
+            { icon: '👥', label: 'New Users (' + days + 'd)', val: fmtN((d.user_growth || []).reduce((s, r) => s + r.count, 0)), color: 'var(--blue)' },
+            { icon: '💵', label: 'Paid Out (' + days + 'd)', val: fmt$((d.payout_trend || []).reduce((s, r) => s + parseFloat(r.amount || 0), 0)), color: 'var(--gold)' },
+            { icon: '✅', label: 'Q Approval Rate', val: Math.round(h.q_approval_rate || 0) + '%', color: 'var(--green)' },
+            { icon: '💰', label: 'Platform Fee Income', val: fmt$(h.platform_fee_income || 0), color: 'var(--purple)' },
+            { icon: '🔄', label: 'Retention (streak>1)', val: Math.round(h.retention_rate || 0) + '%', color: 'var(--orange)' },
+          ].map(k => `<div class="kpi-card">
+          <div style="font-size:1.3rem;margin-bottom:.25rem">${k.icon}</div>
+          <div class="kpi-val" style="color:${k.color}">${k.val}</div>
+          <div class="kpi-lbl">${k.label}</div>
+        </div>`).join('')}
+      </div>
+
+      <div class="grid-2">
+        <!-- User Growth Sparkline -->
+        <div class="panel">
+          <div class="panel-header"><h2>📈 User Growth (${days}d)</h2></div>
+          <div class="panel-body">
+            ${d.user_growth?.length ? `
+              <div class="sparkline" style="margin-bottom:.5rem">
+                ${d.user_growth.map(r => `<div class="spark-bar" style="height:${Math.max(6, r.count / maxUserGrowth * 64)}px;background:linear-gradient(180deg,var(--blue),#60A5FA)" title="${r.day}: ${r.count}"></div>`).join('')}
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted)"><span>Oldest</span><span>Today</span></div>`
+            : '<div style="color:var(--muted);text-align:center;padding:1rem">No registration data yet</div>'}
+          </div>
+        </div>
+
+        <!-- Payout Trend -->
+        <div class="panel">
+          <div class="panel-header"><h2>💵 Payout Trend (${days}d)</h2></div>
+          <div class="panel-body">
+            ${d.payout_trend?.length ? `
+              <div class="sparkline" style="margin-bottom:.5rem">
+                ${d.payout_trend.map(r => `<div class="spark-bar" style="height:${Math.max(6, r.amount / maxPayout * 64)}px;background:linear-gradient(180deg,var(--green),#4ADE80)" title="${r.day}: ${fmt$(r.amount)}"></div>`).join('')}
+              </div>
+              <div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--muted)"><span>Oldest</span><span>Today</span></div>`
+            : '<div style="color:var(--muted);text-align:center;padding:1rem">No payout data yet</div>'}
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Question Accuracy by Category -->
+        <div class="panel">
+          <div class="panel-header"><h2>❓ Accuracy by Category</h2></div>
+          <div class="panel-body">
+            ${d.question_accuracy_by_category?.length
+            ? d.question_accuracy_by_category.map(c => `
+                <div class="chart-row">
+                  <div class="chart-lbl">${c.category}</div>
+                  <div class="chart-track">
+                    <div class="chart-fill" style="width:${c.accuracy_pct}%;background:linear-gradient(90deg,var(--blue),#60A5FA)">${c.accuracy_pct}%</div>
+                  </div>
+                  <div class="chart-val">${fmtN(c.total)} Qs</div>
+                </div>`).join('')
+            : '<div style="color:var(--muted);text-align:center;padding:1rem">No question data yet</div>'}
+          </div>
+        </div>
+
+        <!-- Level Funnel -->
+        <div class="panel">
+          <div class="panel-header"><h2>🎮 Level Completion Funnel</h2></div>
+          <div class="panel-body">
+            ${lvl.map(l => `
+              <div style="margin-bottom:1rem">
+                <div style="display:flex;justify-content:space-between;font-size:.82rem;margin-bottom:.4rem">
+                  <span style="font-weight:600">${l.label}</span>
+                  <span style="color:var(--muted)">${fmtN(l.val)} · <b style="color:var(--text)">${l.rate}%</b></span>
+                </div>
+                <div class="bar-track" style="height:10px">
+                  <div class="bar-fill" style="width:${l.rate}%;background:${l.color}"></div>
+                </div>
+              </div>`).join('')}
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <!-- Top Earners -->
+        <div class="panel">
+          <div class="panel-header"><h2>🏆 Top Earners</h2></div>
+          <div class="panel-body">
+            ${d.top_earners?.length
+            ? d.top_earners.map(u => `
+                <div class="chart-row">
+                  <div class="chart-lbl">${u.first_name || ''} ${(u.last_name || '').substring(0, 1)}</div>
+                  <div class="chart-track">
+                    <div class="chart-fill" style="width:${Math.round(u.total_earned / maxEarner * 100)}%;background:linear-gradient(90deg,var(--gold),var(--gold2))"></div>
+                  </div>
+                  <div class="chart-val">${fmt$(u.total_earned)}</div>
+                </div>`).join('')
+            : '<div style="color:var(--muted);text-align:center;padding:1rem">No users yet</div>'}
+          </div>
+        </div>
+
+        <!-- Company Spend -->
+        <div class="panel">
+          <div class="panel-header"><h2>🏢 Company Spend</h2></div>
+          <div class="panel-body">
+            ${d.company_spend?.length
+            ? d.company_spend.map(c => `
+                <div class="chart-row">
+                  <div class="chart-lbl">${c.name.split(' ')[0]}</div>
+                  <div class="chart-track">
+                    <div class="chart-fill" style="width:${Math.round((c.total_spent || 0) / maxSpend * 100)}%;background:linear-gradient(90deg,var(--purple),#A78BFA)"></div>
+                  </div>
+                  <div class="chart-val">${fmt$(c.total_spent)}</div>
+                </div>`).join('')
+            : '<div style="color:var(--muted);text-align:center;padding:1rem">No companies yet</div>'}
+          </div>
+        </div>
+      </div>
+
+      <!-- Platform Health -->
+      <div class="panel">
+        <div class="panel-header"><h2>⚕️ Platform Health</h2></div>
+        <div class="panel-body">
+          <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:1rem">
+            ${[
+            { label: 'Question Approval', val: Math.round(h.q_approval_rate || 0) + '%', ok: true },
+            { label: 'Withdrawal Success', val: Math.round(h.withdrawal_success_rate || 0) + '%', ok: true },
+            { label: 'Ban Rate', val: Math.round(h.ban_rate || 0) + '%', ok: false },
+            { label: 'Platform Fee Income', val: fmt$(h.platform_fee_income || 0), ok: true },
+            { label: 'Retention Rate', val: Math.round(h.retention_rate || 0) + '%', ok: true },
+          ].map(item => `<div style="background:var(--surface);border-radius:10px;padding:.9rem;text-align:center">
+              <div style="font-size:1.3rem;font-weight:700;color:${item.ok ? 'var(--green)' : 'var(--orange)'}">${item.val}</div>
+              <div style="font-size:.7rem;color:var(--muted);margin-top:.2rem">${item.label}</div>
+            </div>`).join('')}
+          </div>
+        </div>
+      </div>`;
+      } catch (e) {
+        el.innerHTML = `<div style="text-align:center;padding:4rem;color:var(--muted)">❌ ${e.message}</div>`;
+      }
+    }
+
+    loadAnalytics();
+  </script>
+</body>
+
+</html>

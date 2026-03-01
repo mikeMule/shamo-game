@@ -1,0 +1,434 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>SHAMO Admin — Settings</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .s-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      margin-bottom: 1.25rem;
+      overflow: hidden
+    }
+
+    .s-header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: .6rem
+    }
+
+    .s-header h2 {
+      font-size: .92rem;
+      font-weight: 700
+    }
+
+    .s-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: .9rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      gap: 1rem
+    }
+
+    .s-row:last-child {
+      border-bottom: none
+    }
+
+    .s-info .name {
+      font-size: .87rem;
+      font-weight: 600
+    }
+
+    .s-info .desc {
+      font-size: .75rem;
+      color: var(--muted);
+      margin-top: .2rem
+    }
+
+    .toggle {
+      position: relative;
+      width: 44px;
+      height: 24px;
+      flex-shrink: 0
+    }
+
+    .toggle input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+      position: absolute
+    }
+
+    .toggle-slider {
+      position: absolute;
+      inset: 0;
+      background: var(--border);
+      border-radius: 24px;
+      cursor: pointer;
+      transition: .2s
+    }
+
+    .toggle-slider::before {
+      content: '';
+      position: absolute;
+      width: 18px;
+      height: 18px;
+      background: #fff;
+      border-radius: 50%;
+      left: 3px;
+      top: 3px;
+      transition: .2s
+    }
+
+    .toggle input:checked+.toggle-slider {
+      background: var(--green)
+    }
+
+    .toggle input:checked+.toggle-slider::before {
+      transform: translateX(20px)
+    }
+
+    .s-input {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .45rem .75rem;
+      color: var(--text);
+      font-size: .85rem;
+      font-family: inherit;
+      outline: none;
+      width: 140px;
+      text-align: right
+    }
+
+    .s-input:focus {
+      border-color: var(--gold)
+    }
+
+    .caution-tag {
+      display: inline-block;
+      background: rgba(239, 68, 68, .12);
+      color: #FCA5A5;
+      padding: 2px 8px;
+      border-radius: 6px;
+      font-size: .72rem;
+      font-weight: 600;
+      margin-left: .4rem
+    }
+  </style>
+</head>
+
+<body>
+  <div class="admin-layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main-area">
+      <div class="topbar">
+        <h1>Settings <span class="subtitle">— Platform Configuration</span></h1>
+        <div class="topbar-actions">
+          <span id="settingsStatus" style="font-size:.78rem;color:var(--muted)"></span>
+          <button class="btn btn-primary" onclick="saveAll()">💾 Save All</button>
+        </div>
+      </div>
+      <div class="content">
+
+        <!-- Platform Controls -->
+        <div class="s-section">
+          <div class="s-header"><span>🔧</span>
+            <h2>Platform Controls</h2>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Maintenance Mode<span class="caution-tag">CAUTION</span></div>
+              <div class="desc">Players see a maintenance screen when this is on.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="tog_maintenance_mode" /><span
+                class="toggle-slider"></span></label>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">One Game Per Day</div>
+              <div class="desc">Users can only play once per calendar day.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="tog_one_game_per_day" /><span
+                class="toggle-slider"></span></label>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Allow Registrations</div>
+              <div class="desc">New Telegram users can register and play.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="tog_allow_registrations" /><span
+                class="toggle-slider"></span></label>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Company Game Feature</div>
+              <div class="desc">Verified companies can create branded games.</div>
+            </div>
+            <label class="toggle"><input type="checkbox" id="tog_company_games" /><span
+                class="toggle-slider"></span></label>
+          </div>
+        </div>
+
+        <!-- Financial -->
+        <div class="s-section">
+          <div class="s-header"><span>💰</span>
+            <h2>Financial Settings</h2>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Commission (%)</div>
+              <div class="desc">% of prize pool taken as SHAMO revenue.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="s-input" type="number"
+                id="set_commission_pct" step="0.5" min="0" max="50" /><span
+                style="font-size:.82rem;color:var(--muted)">%</span></div>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Withdrawal Fee (%)</div>
+              <div class="desc">Company commission % deducted from withdrawal (rest sent to user).</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="s-input" type="number"
+                id="set_withdrawal_fee_pct" step="0.5" min="0" max="50" /><span
+                style="font-size:.82rem;color:var(--muted)">%</span></div>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Min Withdrawal (ETB)</div>
+              <div class="desc">Smallest amount a user can withdraw.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="s-input" type="number"
+                id="set_min_withdrawal_etb" step="5" min="0" /><span
+                style="font-size:.82rem;color:var(--muted)">ETB</span></div>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Max Daily Withdrawal (ETB)</div>
+              <div class="desc">Max total withdrawal per user per day.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="s-input" type="number"
+                id="set_max_daily_withdrawal_etb" step="100" min="100" /><span
+                style="font-size:.82rem;color:var(--muted)">ETB</span></div>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Default Prize Pool (ETB)</div>
+              <div class="desc">Default prize pool when creating a new game.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="s-input" type="number"
+                id="set_default_prize_pool_etb" step="50" min="50" /><span
+                style="font-size:.82rem;color:var(--muted)">ETB</span></div>
+          </div>
+        </div>
+
+        <!-- Game Settings -->
+        <div class="s-section">
+          <div class="s-header"><span>🎮</span>
+            <h2>Game Settings</h2>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Questions per Game</div>
+              <div class="desc">Number of questions drawn for a game.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="s-input" type="number"
+                id="set_questions_per_game" step="1" min="1" max="50" /><span
+                style="font-size:.82rem;color:var(--muted)">Q</span></div>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Player Cap (%)</div>
+              <div class="desc">Maximum % of prize pool a single player can win.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="s-input" type="number"
+                id="set_player_cap_pct" step="1" min="1" max="100" /><span
+                style="font-size:.82rem;color:var(--muted)">%</span></div>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Max Wrong Answers</div>
+              <div class="desc">Errors allowed before Game Over.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="s-input" type="number"
+                id="set_max_wrong_answers" step="1" min="0" max="10" /><span
+                style="font-size:.82rem;color:var(--muted)">fails</span></div>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Play countdown (seconds per question)</div>
+              <div class="desc">Time allowed for each answer. Stored in database; in-game timer uses this value dynamically.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="s-input" type="number"
+                id="set_seconds_per_question" step="1" min="3" max="30" /><span
+                style="font-size:.82rem;color:var(--muted)">sec</span></div>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Cooldown Hours</div>
+              <div class="desc">Time a player is blocked after Game Over.</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="s-input" type="number"
+                id="set_cooldown_hours" step="1" min="0" max="48" /><span
+                style="font-size:.82rem;color:var(--muted)">h</span></div>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Daily Reset Hour (UTC+3)</div>
+              <div class="desc">Hour at which the daily game resets (Addis time).</div>
+            </div>
+            <div style="display:flex;align-items:center;gap:.4rem"><input class="s-input" type="number"
+                id="set_daily_reset_hour" step="1" min="0" max="23" /><span
+                style="font-size:.82rem;color:var(--muted)">h</span></div>
+          </div>
+        </div>
+
+        <!-- Admin Account -->
+        <div class="s-section">
+          <div class="s-header"><span>🔑</span>
+            <h2>Admin Account</h2>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Admin Username</div>
+              <div class="desc">Login username for this panel.</div>
+            </div>
+            <input class="s-input" type="text" id="set_admin_username" style="text-align:left" />
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Admin Password</div>
+              <div class="desc">⚠️ Use a strong password.</div>
+            </div>
+            <input class="s-input" type="password" id="set_admin_password" style="text-align:left" />
+          </div>
+        </div>
+
+        <!-- API Keys (shown but not editable in DB since they need env vars) -->
+        <div class="s-section">
+          <div class="s-header"><span>🔐</span>
+            <h2>API Configuration (read from .env)</h2>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">Telegram Bot Token</div>
+              <div class="desc">Set TELEGRAM_BOT_TOKEN in .env file.</div>
+            </div>
+            <span style="font-size:.8rem;color:var(--muted)">env variable</span>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name">DATABASE_URL</div>
+              <div class="desc">Supabase PostgreSQL connection string in .env.</div>
+            </div>
+            <span style="font-size:.8rem;color:var(--green)">✅ configured</span>
+          </div>
+        </div>
+
+        <!-- Danger Zone -->
+        <div class="s-section" style="border-color:rgba(239,68,68,.3)">
+          <div class="s-header" style="background:rgba(239,68,68,.05)"><span>⛔</span>
+            <h2 style="color:#FCA5A5">Danger Zone</h2>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name" style="color:#FCA5A5">Reset All Streaks</div>
+              <div class="desc">Reset every user's current streak to 0.</div>
+            </div>
+            <button class="btn btn-red btn-sm"
+              onclick="dangerAction('Reset all streaks?','UPDATE users SET current_streak=0')">Run</button>
+          </div>
+          <div class="s-row">
+            <div class="s-info">
+              <div class="name" style="color:#FCA5A5">Ban Inactive Zero-Balance Users</div>
+              <div class="desc">Ban users who never played and have $0 balance.</div>
+            </div>
+            <button class="btn btn-red btn-sm"
+              onclick="dangerAction('Ban all inactive zero-balance users?','BAN_INACTIVE')">Run</button>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+  <script src="/api/public/env.js"></script>
+  <script src="_shared.js"></script>
+  <script>
+    buildSidebar('settings');
+
+    const TOGGLES = ['maintenance_mode', 'one_game_per_day', 'allow_registrations', 'company_games'];
+    const NUM_SETS = ['commission_pct', 'withdrawal_fee_pct', 'min_withdrawal_etb', 'max_daily_withdrawal_etb', 'default_prize_pool_etb', 'questions_per_game', 'player_cap_pct', 'max_wrong_answers', 'seconds_per_question', 'cooldown_hours', 'daily_reset_hour'];
+    const STR_SETS = ['admin_username', 'admin_password'];
+
+    async function loadSettings() {
+      document.getElementById('settingsStatus').textContent = 'Loading…';
+      try {
+        const s = await apiGet('/settings');
+        // Populate toggles
+        TOGGLES.forEach(k => {
+          const el = document.getElementById(`tog_${k}`);
+          if (el && s[k]) { try { el.checked = JSON.parse(s[k].value); } catch { } }
+        });
+        // Populate number inputs
+        NUM_SETS.forEach(k => {
+          const el = document.getElementById(`set_${k}`);
+          if (el && s[k]) { try { el.value = JSON.parse(s[k].value); } catch { } }
+        });
+        // Populate string inputs
+        STR_SETS.forEach(k => {
+          const el = document.getElementById(`set_${k}`);
+          if (el && s[k]) { try { el.value = JSON.parse(s[k].value); } catch { } }
+        });
+        document.getElementById('settingsStatus').textContent = 'Loaded from DB';
+      } catch (e) {
+        document.getElementById('settingsStatus').textContent = 'DB has no settings yet — defaults shown';
+        // Set sensible defaults
+        document.getElementById('tog_one_game_per_day').checked = true;
+        document.getElementById('tog_allow_registrations').checked = true;
+        document.getElementById('tog_company_games').checked = true;
+        document.getElementById('set_commission_pct').value = 15;
+        document.getElementById('set_withdrawal_fee_pct').value = 5;
+        document.getElementById('set_min_withdrawal_etb').value = 50;
+        document.getElementById('set_max_daily_withdrawal_etb').value = 5000;
+        document.getElementById('set_default_prize_pool_etb').value = 500;
+        document.getElementById('set_questions_per_game').value = 10;
+        document.getElementById('set_player_cap_pct').value = 30;
+        document.getElementById('set_max_wrong_answers').value = 3;
+        document.getElementById('set_seconds_per_question').value = 12;
+        document.getElementById('set_cooldown_hours').value = 24;
+        document.getElementById('set_daily_reset_hour').value = 0;
+      }
+    }
+
+    async function saveAll() {
+      const settings = {};
+      TOGGLES.forEach(k => { settings[k] = document.getElementById(`tog_${k}`).checked; });
+      NUM_SETS.forEach(k => { settings[k] = parseFloat(document.getElementById(`set_${k}`).value) || 0; });
+      STR_SETS.forEach(k => { settings[k] = document.getElementById(`set_${k}`).value || ''; });
+
+      try {
+        await apiPut('/settings', { settings });
+        showToast('Settings saved ✅', 'success');
+        document.getElementById('settingsStatus').textContent = 'Saved ' + new Date().toLocaleTimeString();
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    function dangerAction(msg) {
+      if (!confirm(msg + '\n\nThis action cannot be undone!')) return;
+      showToast('Action executed (connect server-side logic)', 'info');
+    }
+
+    loadSettings();
+  </script>
+</body>
+
+</html>

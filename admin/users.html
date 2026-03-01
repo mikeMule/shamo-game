@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>SHAMO Admin — Users</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .user-detail-section { margin-bottom: 1.25rem; }
+    .user-detail-section h3 { font-size: .7rem; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); margin-bottom: .5rem; padding-bottom: .25rem; border-bottom: 1px solid var(--border); }
+    .user-detail-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: .5rem .1rem; }
+    .user-detail-item { display: flex; align-items: center; justify-content: space-between; gap: .5rem; padding: .4rem .5rem; background: var(--surface); border-radius: 6px; font-size: .8rem; }
+    .user-detail-item .label { color: var(--muted); white-space: nowrap; }
+    .user-detail-item .value { font-weight: 600; text-align: right; word-break: break-all; }
+    .user-detail-item .value.copyable { cursor: pointer; display: flex; align-items: center; justify-content: flex-end; gap: .3rem; }
+    .user-detail-item .value.copyable:hover { color: var(--gold); }
+    .btn-copy { padding: 2px 6px; font-size: .65rem; border-radius: 4px; background: var(--border); border: none; color: var(--muted); cursor: pointer; }
+    .btn-copy:hover { background: var(--gold); color: #0A0800; }
+    .user-detail-full { grid-column: 1 / -1; }
+    .testing-box { background: rgba(232,184,75,.08); border: 1px solid rgba(232,184,75,.25); border-radius: 8px; padding: .75rem; margin-top: .5rem; }
+    .testing-box p { font-size: .75rem; color: var(--muted); margin-bottom: .5rem; line-height: 1.4; }
+    .modal-body.scrollable { max-height: 60vh; overflow-y: auto; }
+    .fmt-etb { color: var(--gold); font-weight: 600; }
+    .user-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; flex-shrink: 0; background: var(--surface); }
+    .user-cell { display: flex; align-items: center; gap: 10px; }
+  </style>
+</head>
+
+<body>
+  <div class="admin-layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main-area">
+      <div class="topbar">
+        <h1>Users <span class="subtitle">— Player Management</span></h1>
+        <div class="topbar-actions">
+          <div class="search-input"><span>🔍</span><input type="text" id="searchU" placeholder="Name, phone, @username…"
+              oninput="debouncedLoad()" /></div>
+          <select id="uRole" onchange="loadUsers(1)">
+            <option value="">All Roles</option>
+            <option value="player">Player</option>
+            <option value="company">Company</option>
+            <option value="admin">Admin</option>
+          </select>
+          <select id="uStatus" onchange="loadUsers(1)">
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="banned">Banned</option>
+            <option value="inactive">Inactive</option>
+          </select>
+        </div>
+      </div>
+      <div class="content">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:48px"></th>
+              <th>User</th>
+              <th>TG ID</th>
+              <th>Phone</th>
+              <th>Role</th>
+              <th>Status</th>
+              <th>Balance</th>
+              <th>Earned</th>
+              <th>Games</th>
+              <th>Win %</th>
+              <th>Joined</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="usersBody">
+            <tr>
+              <td colspan="12" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination" id="uPagination"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- User Detail Modal -->
+  <div class="modal-overlay" id="modalUser">
+    <div class="modal" style="max-width:640px">
+      <div class="modal-header">
+        <h2 id="userModalTitle">User Detail</h2>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('modalUser')">✕</button>
+      </div>
+      <div class="modal-body scrollable" id="userModalBody"></div>
+      <div class="modal-footer" id="userModalFooter"></div>
+    </div>
+  </div>
+
+  <!-- Balance Adjust Modal -->
+  <div class="modal-overlay" id="modalBalance">
+    <div class="modal" style="max-width:360px">
+      <div class="modal-header">
+        <h2 id="balTitle">Adjust Balance</h2>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('modalBalance')">✕</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="balUserId" />
+        <div class="form-group"><label>Type</label>
+          <select id="balType">
+            <option value="credit">Credit (Add)</option>
+            <option value="debit">Debit (Remove)</option>
+          </select>
+        </div>
+        <div class="form-group"><label>Amount (ETB)</label><input id="balAmt" type="number" step="0.01" placeholder="50.00" /></div>
+        <div class="form-group"><label>Note</label><input id="balNote" type="text" placeholder="Admin adjustment…" /></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalBalance')">Cancel</button>
+        <button class="btn btn-primary" id="balBtn" onclick="applyBalance()">Apply</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/api/public/env.js"></script>
+  <script src="_shared.js"></script>
+  <script>
+    let uPage = 1;
+    let _currentUser = null; // for clear-game-test and modal actions
+    buildSidebar('users');
+
+    function fmtEtb(n) { return fmtN(Number(n || 0).toFixed(0)) + ' ETB'; }
+
+    function copyVal(text, label) {
+      navigator.clipboard.writeText(String(text)).then(() => showToast(label + ' copied', 'success')).catch(() => showToast('Copy failed', 'error'));
+    }
+
+    async function loadUsers(page = uPage) {
+      uPage = page;
+      const tbody = document.getElementById('usersBody');
+      tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td></tr>`;
+      try {
+        const search = document.getElementById('searchU').value;
+        const role = document.getElementById('uRole').value;
+        const status = document.getElementById('uStatus').value;
+        const r = await apiGet(`/users?page=${page}&per_page=15&search=${encodeURIComponent(search)}&role=${role}&status=${status}&sort=created_at&order=desc`);
+        if (!r.data?.length) {
+          tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:3rem;color:var(--muted)">No users found</td></tr>`;
+          return;
+        }
+        tbody.innerHTML = r.data.map(u => {
+          const wr = u.games_played > 0 ? Math.round(u.games_won / u.games_played * 100) : 0;
+          const initLetter = ((u.first_name || '') + ' ' + (u.last_name || '')).trim()[0]?.toUpperCase() || '?';
+          const photoUrl = (u.photo_url || '').trim().replace(/"/g, '&quot;');
+          const avatarHtml = photoUrl
+            ? `<span class="user-avatar" style="display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--muted)" data-fallback="${initLetter}"><img src="${photoUrl}" referrerpolicy="no-referrer" style="width:100%;height:100%;object-fit:cover;border-radius:50%" alt="" onerror="this.outerHTML=this.parentElement.getAttribute('data-fallback')"></span>`
+            : `<span class="user-avatar" style="display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:600;color:var(--muted)">${initLetter}</span>`;
+          return `<tr>
+          <td style="padding:8px 10px">${avatarHtml}</td>
+          <td>
+            <div style="font-weight:600">${(u.first_name || '') + ' ' + (u.last_name || '')}</div>
+            <div style="font-size:.72rem;color:var(--muted)">@${u.telegram_username || '—'}</div>
+          </td>
+          <td style="font-size:.7rem;color:var(--muted)" title="Telegram ID">${u.telegram_id || '—'}</td>
+          <td style="font-size:.8rem;color:var(--muted)">${u.phone_number || '—'}</td>
+          <td>${badge(u.role || 'player')}</td>
+          <td>${u.is_banned ? badge('banned') : badge('active')}</td>
+          <td style="font-weight:600;color:var(--gold)">${fmtEtb(u.balance)}</td>
+          <td>${fmtEtb(u.total_earned)}</td>
+          <td>${fmtN(u.games_played)}</td>
+          <td><div style="display:flex;align-items:center;gap:.4rem"><div class="bar-track" style="width:44px;height:6px"><div class="bar-fill" style="width:${wr}%;background:${wr > 60 ? 'var(--green)' : 'var(--gold)'}"></div></div><span style="font-size:.75rem">${wr}%</span></div></td>
+          <td style="font-size:.75rem;color:var(--muted)">${fmtDate(u.created_at)}</td>
+          <td>
+            <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+              <button class="btn btn-ghost btn-sm" onclick="viewUser('${u.id}')" title="View full detail">👁</button>
+              <button class="btn btn-ghost btn-sm" onclick="openBalance('${u.id}','${u.first_name}')" title="Adjust balance">💰</button>
+              <button class="btn ${u.is_banned ? 'btn-green' : 'btn-red'} btn-sm" onclick="toggleBan('${u.id}')" title="${u.is_banned ? 'Unban' : 'Ban'}">${u.is_banned ? '🔓' : '🚫'}</button>
+              <button class="btn btn-red btn-sm" onclick="deleteUser('${u.id}','${u.first_name}')" title="Delete user">🗑</button>
+            </div>
+          </td>
+        </tr>`;
+        }).join('');
+        renderPagination('uPagination', r.page, r.total, r.per_page, 'loadUsers');
+      } catch (e) {
+        tbody.innerHTML = `<tr><td colspan="12" style="text-align:center;padding:2rem;color:var(--muted)">❌ ${e.message}</td></tr>`;
+      }
+    }
+
+    function detailRow(label, value, copyPayload) {
+      const v = value ?? '—';
+      const copyBtn = copyPayload != null ? `<button class="btn-copy" type="button" onclick="copyVal(document.getElementById('copy-${copyPayload.id}').textContent, '${String(label).replace(/'/g, "\\'")}')">Copy</button>` : '';
+      const valueContent = copyPayload != null ? `<span id="copy-${copyPayload.id}">${String(copyPayload.raw)}</span> ${copyBtn}` : v;
+      return `<div class="user-detail-item"><span class="label">${label}</span><div class="value ${copyPayload ? 'copyable' : ''}">${valueContent}</div></div>`;
+    }
+
+    async function viewUser(id) {
+      try {
+        const u = await apiGet(`/users/${id}`);
+        _currentUser = u;
+        const wr = u.games_played > 0 ? Math.round(u.games_won / u.games_played * 100) : 0;
+        const totalAnswers = (u.correct_answers || 0) + (u.wrong_answers || 0);
+        const acc = totalAnswers > 0 ? Math.round((u.correct_answers || 0) / totalAnswers * 100) : 0;
+        const name = `${u.first_name || ''} ${u.last_name || ''}`.trim() || 'User';
+        document.getElementById('userModalTitle').textContent = name + ' — Full detail';
+
+        document.getElementById('userModalBody').innerHTML = `
+          <div class="user-detail-section">
+            <h3>Identity</h3>
+            <div class="user-detail-grid">
+              ${detailRow('User ID (UUID)', u.id, { id: 'uid', raw: u.id })}
+              ${detailRow('Telegram ID', u.telegram_id, { id: 'tgid', raw: String(u.telegram_id ?? '') })}
+              ${detailRow('Username', (u.telegram_username ? '@' + u.telegram_username : '—'))}
+              ${detailRow('First name', u.first_name)}
+              ${detailRow('Last name', u.last_name)}
+              ${detailRow('Language', u.language_code || '—')}
+              <div class="user-detail-item user-detail-full">
+                <span class="label">Photo URL</span>
+                <span class="value" style="word-break:break-all">${u.photo_url ? `<a href="${u.photo_url}" target="_blank" rel="noopener" style="color:var(--blue)">View</a>` : '—'}</span>
+              </div>
+            </div>
+          </div>
+          <div class="user-detail-section">
+            <h3>Contact</h3>
+            <div class="user-detail-grid">${detailRow('Phone', u.phone_number)}</div>
+          </div>
+          <div class="user-detail-section">
+            <h3>Account</h3>
+            <div class="user-detail-grid">
+              ${detailRow('Role', badge(u.role || 'player'))}
+              ${detailRow('Active', u.is_active ? 'Yes' : 'No')}
+              ${detailRow('Banned', u.is_banned ? 'Yes' : 'No')}
+              ${u.ban_reason ? `<div class="user-detail-item user-detail-full"><span class="label">Ban reason</span><span class="value" style="color:var(--red)">${u.ban_reason}</span></div>` : ''}
+            </div>
+          </div>
+          <div class="user-detail-section">
+            <h3>Balance (ETB)</h3>
+            <div class="user-detail-grid">
+              ${detailRow('Balance', `<span class="fmt-etb">${fmtEtb(u.balance)}</span>`)}
+              ${detailRow('Total earned', fmtEtb(u.total_earned))}
+              ${detailRow('Total withdrawn', fmtEtb(u.total_withdrawn))}
+            </div>
+          </div>
+          <div class="user-detail-section">
+            <h3>Game stats</h3>
+            <div class="user-detail-grid">
+              ${detailRow('Games played', fmtN(u.games_played))}
+              ${detailRow('Games won', fmtN(u.games_won))}
+              ${detailRow('Win rate', wr + '%')}
+              ${detailRow('Correct answers', fmtN(u.correct_answers))}
+              ${detailRow('Wrong answers', fmtN(u.wrong_answers))}
+              ${detailRow('Accuracy', acc + '%')}
+              ${detailRow('Current streak', u.current_streak ?? 0)}
+              ${detailRow('Best streak', u.best_streak ?? 0)}
+              ${detailRow('Last game', fmtDate(u.last_game_date))}
+            </div>
+          </div>
+          <div class="user-detail-section">
+            <h3>Timestamps</h3>
+            <div class="user-detail-grid">
+              ${detailRow('Created', fmtTime(u.created_at))}
+              ${detailRow('Updated', fmtTime(u.updated_at))}
+            </div>
+          </div>
+          ${u.ban_reason ? `<div class="user-detail-section"><h3>Ban</h3><div style="background:rgba(239,68,68,.1);border:1px solid rgba(239,68,68,.3);border-radius:8px;padding:.65rem;font-size:.82rem;color:#FCA5A5">🚫 ${u.ban_reason}</div></div>` : ''}
+          <div class="user-detail-section">
+            <h3>Testing — clear all cache (must for re-testing)</h3>
+            <div class="testing-box">
+              <p><strong>Clears everything that causes “Already played”:</strong> QR scans, game sessions, leaderboard, round answers, spin results. After this, the user can scan the same QR and join the game again.</p>
+              <p style="font-size:.7rem;margin-top:.5rem;color:var(--muted)">If the app still shows “Already played”, the player must clear the app’s site data (localStorage) in their browser or Telegram WebView — we cannot clear that from here.</p>
+              <button type="button" class="btn" style="background:var(--gold);color:#0A0800;border:none;margin-top:.5rem" id="btnClearGameTest" onclick="clearGameTest()">🔄 Clear all cache for this user</button>
+            </div>
+          </div>
+        `;
+
+        document.getElementById('userModalFooter').innerHTML = `
+          <button class="btn btn-ghost" onclick="closeModal('modalUser')">Close</button>
+          <button class="btn btn-ghost" onclick="openBalance('${u.id}','${u.first_name}');closeModal('modalUser')">💰 Adjust balance</button>
+          <button class="btn ${u.is_banned ? 'btn-green' : 'btn-red'}" onclick="toggleBan('${u.id}');closeModal('modalUser')">${u.is_banned ? '🔓 Unban' : '🚫 Ban'}</button>
+          <button class="btn btn-red" onclick="deleteUser('${u.id}','${u.first_name}');closeModal('modalUser')">🗑 Delete</button>
+        `;
+        openModal('modalUser');
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    async function clearGameTest() {
+      if (!_currentUser?.id) return;
+      if (!confirm('Clear all QR scan and game session data for this user? They will be able to scan the same QR and join the game again. Use for testing only.')) return;
+      const btn = document.getElementById('btnClearGameTest');
+        if (btn) { btn.disabled = true; btn.textContent = 'Clearing all cache…'; }
+      try {
+        const r = await apiFetch(`/users/${_currentUser.id}/clear-game-test`, { method: 'POST', body: {} });
+        showToast(r.message || 'All cache cleared. User can scan QR and play again.', 'success');
+        _currentUser = await apiGet(`/users/${_currentUser.id}`);
+        viewUser(_currentUser.id);
+      } catch (e) {
+        showToast(e.message || 'Failed', 'error');
+        if (btn) { btn.disabled = false; btn.textContent = '🔄 Clear all cache for this user'; }
+      }
+    }
+
+    function openBalance(uid, name) {
+      document.getElementById('balUserId').value = uid;
+      document.getElementById('balTitle').textContent = `Adjust balance — ${name}`;
+      document.getElementById('balAmt').value = '';
+      document.getElementById('balNote').value = '';
+      openModal('modalBalance');
+    }
+
+    async function applyBalance() {
+      const uid = document.getElementById('balUserId').value;
+      const amt = parseFloat(document.getElementById('balAmt').value);
+      const type = document.getElementById('balType').value;
+      const note = document.getElementById('balNote').value;
+      if (!amt || amt <= 0) { showToast('Enter a valid amount', 'error'); return; }
+      const btn = document.getElementById('balBtn');
+      btn.disabled = true; btn.textContent = 'Applying…';
+      try {
+        const r = await apiPost(`/users/${uid}/balance`, { amount: amt, type, note });
+        showToast(`Balance: ${fmtEtb(r.balance_before)} → ${fmtEtb(r.balance_after)}`, 'success');
+        closeModal('modalBalance');
+        loadUsers(uPage);
+      } catch (e) { showToast(e.message, 'error'); }
+      finally { btn.disabled = false; btn.textContent = 'Apply'; }
+    }
+
+    async function toggleBan(id) {
+      try {
+        const r = await apiPost(`/users/${id}/ban`);
+        showToast(r.message, r.is_banned ? 'warning' : 'success');
+        loadUsers(uPage);
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    async function deleteUser(id, name) {
+      if (!confirm(`Permanently delete "${name}"? All their data will be removed. This cannot be undone.`)) return;
+      try {
+        await apiDelete(`/users/${id}`);
+        showToast(`User "${name}" deleted.`, 'success');
+        closeModal('modalUser');
+        loadUsers(uPage);
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    let debT;
+    function debouncedLoad() { clearTimeout(debT); debT = setTimeout(() => loadUsers(1), 350); }
+
+    loadUsers(1);
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,312 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>SHAMO Admin — Dashboard</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .db-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: .45rem;
+      background: rgba(255, 255, 255, .06);
+      border: 1px solid rgba(255, 255, 255, .1);
+      border-radius: 999px;
+      padding: .3rem .75rem;
+      font-size: .75rem;
+      font-weight: 600;
+      letter-spacing: .02em;
+      color: #94A3B8;
+      transition: .3s;
+    }
+
+    .db-dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: #6B7280;
+      flex-shrink: 0;
+      transition: background .4s;
+    }
+
+    .db-dot.ok {
+      background: #22C55E;
+      box-shadow: 0 0 0 0 rgba(34, 197, 94, .6);
+      animation: pulse-green 2s infinite;
+    }
+
+    .db-dot.err {
+      background: #EF4444;
+      box-shadow: 0 0 0 0 rgba(239, 68, 68, .6);
+      animation: pulse-red 2s infinite;
+    }
+
+    @keyframes pulse-green {
+      0% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, .6);
+      }
+
+      70% {
+        box-shadow: 0 0 0 7px rgba(34, 197, 94, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(34, 197, 94, 0);
+      }
+    }
+
+    @keyframes pulse-red {
+      0% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, .6);
+      }
+
+      70% {
+        box-shadow: 0 0 0 7px rgba(239, 68, 68, 0);
+      }
+
+      100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="admin-layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main-area">
+      <div class="topbar">
+        <h1>Dashboard <span class="subtitle">— Overview</span></h1>
+        <div class="topbar-actions">
+          <div class="db-badge" id="dbBadge" title="Database connection status">
+            <span class="db-dot" id="dbDot"></span>
+            <span id="dbLabel">Checking DB…</span>
+          </div>
+          <button class="btn btn-ghost btn-sm" onclick="loadAll()">🔄 Refresh</button>
+          <span id="lastUpdated" style="font-size:.72rem;color:var(--muted);letter-spacing:.01em;min-width:200px;text-align:right"></span>
+        </div>
+      </div>
+      <div class="content">
+        <!-- Stats grid -->
+        <div class="stats-grid" id="statsGrid">
+          <div class="stat-card">
+            <div class="stat-value" style="color:var(--muted)">…</div>
+            <div class="stat-label">Loading</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:var(--muted)">…</div>
+            <div class="stat-label">Loading</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:var(--muted)">…</div>
+            <div class="stat-label">Loading</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:var(--muted)">…</div>
+            <div class="stat-label">Loading</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:var(--muted)">…</div>
+            <div class="stat-label">Loading</div>
+          </div>
+          <div class="stat-card">
+            <div class="stat-value" style="color:var(--muted)">…</div>
+            <div class="stat-label">Loading</div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Active Game -->
+          <div class="panel">
+            <div class="panel-header">
+              <h2>🎮 Active Game</h2>
+            </div>
+            <div class="panel-body" id="activeGamePanel">
+              <div style="color:var(--muted);padding:1rem;text-align:center">⏳ Loading…</div>
+            </div>
+          </div>
+
+          <!-- Pending Attention -->
+          <div class="panel">
+            <div class="panel-header">
+              <h2>🔔 Pending Attention</h2>
+            </div>
+            <div class="panel-body" id="pendingPanel">
+              <div style="color:var(--muted);padding:1rem;text-align:center">⏳ Loading…</div>
+            </div>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <!-- Top Players -->
+          <div class="panel">
+            <div class="panel-header">
+              <h2>🏆 Top Players</h2>
+            </div>
+            <div class="panel-body" id="leaderboardPanel">
+              <div style="color:var(--muted);text-align:center">⏳ Loading…</div>
+            </div>
+          </div>
+
+          <!-- Quick Actions -->
+          <div class="panel">
+            <div class="panel-header">
+              <h2>⚡ Quick Actions</h2>
+            </div>
+            <div class="panel-body" style="display:flex;flex-direction:column;gap:.65rem">
+              <a href="games.html" class="btn btn-primary">🎮 Manage Games</a>
+              <a href="questions.html" class="btn btn-green">❓ Review Questions</a>
+              <a href="withdrawals.html" class="btn btn-ghost">💸 Process Withdrawals</a>
+              <a href="companies.html" class="btn btn-ghost">🏢 Verify Companies</a>
+              <a href="analytics.html" class="btn btn-ghost">📈 View Analytics</a>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+  <script src="/api/public/env.js"></script>
+  <script src="_shared.js"></script>
+  <script>
+    buildSidebar('dashboard');
+
+    // Live Ethiopian clock
+    function tickEtClock() {
+      const el = document.getElementById('lastUpdated');
+      if (el) el.textContent = '🕐 ' + fmtTimeOnly(new Date()) + ' · Ethiopia';
+    }
+    tickEtClock();
+    setInterval(tickEtClock, 1000);
+
+    async function loadAll() {
+      await Promise.all([loadStats(), loadActiveGame(), loadPending(), loadLeaderboard()]);
+    }
+
+    async function loadStats() {
+      try {
+        const s = await apiGet('/stats');
+        document.getElementById('statsGrid').innerHTML = [
+          { icon: '👥', label: 'Total Users', val: fmtN(s.total_users), cls: 'blue' },
+          { icon: '✅', label: 'Active Users', val: fmtN(s.active_users), cls: 'green' },
+          { icon: '🚫', label: 'Banned', val: fmtN(s.banned_users), cls: 'red' },
+          { icon: '🎮', label: 'Total Games', val: fmtN(s.total_games), cls: 'purple' },
+          { icon: '🏢', label: 'Companies', val: fmtN(s.total_companies), cls: 'gold' },
+          { icon: '❓', label: 'Pending Questions', val: fmtN(s.pending_questions), cls: 'gold' },
+          { icon: '💸', label: 'Pending Withdrawals', val: fmtN(s.pending_withdrawals), cls: 'orange' },
+          { icon: '💰', label: 'Total Paid Out', val: fmt$(s.total_payout), cls: 'green' },
+        ].map(s => `<div class="stat-card ${s.cls}">
+      <div class="stat-icon ${s.cls}">${s.icon}</div>
+      <div class="stat-value">${s.val}</div>
+      <div class="stat-label">${s.label}</div>
+    </div>`).join('');
+      } catch (e) {
+        document.getElementById('statsGrid').innerHTML = `<div style="color:var(--muted);grid-column:1/-1;text-align:center">❌ Failed to load stats: ${e.message}</div>`;
+      }
+    }
+
+    async function loadActiveGame() {
+      try {
+        const r = await apiGet('/games?status=active&per_page=1');
+        const g = r.data?.[0];
+        const el = document.getElementById('activeGamePanel');
+        if (!g) { el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:1rem">No active game right now</div>'; return; }
+        el.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:start;margin-bottom:.75rem">
+        <div>
+          <div style="font-weight:700;font-size:1rem">${g.title}</div>
+          <div style="font-size:.72rem;color:var(--muted)">${fmtDate(g.game_date)}</div>
+          <div style="font-size:.72rem;color:#E8B84B;margin-top:2px">
+            ${g.starts_at ? '▶ ' + fmtTime(g.starts_at) : ''}
+            ${g.ends_at   ? ' — ⏹ ' + fmtTime(g.ends_at) : ''}
+          </div>
+        </div>
+        ${badge(g.status)}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem;margin-bottom:.75rem">
+        <div style="background:var(--surface);border-radius:8px;padding:.6rem;text-align:center">
+          <div style="font-weight:700;color:var(--gold)">${fmtN(g.prize_pool_etb || g.prize_pool_remaining || 0)} ETB</div>
+          <div style="font-size:.7rem;color:var(--muted)">Prize Pool</div>
+        </div>
+        <div style="background:var(--surface);border-radius:8px;padding:.6rem;text-align:center">
+          <div style="font-weight:700">${fmtN(g.total_players)}</div>
+          <div style="font-size:.7rem;color:var(--muted)">Players</div>
+        </div>
+      </div>
+      <button class="btn btn-red btn-sm" onclick="endGame('${g.id}')">⏹ End Game</button>`;
+      } catch (e) {
+        document.getElementById('activeGamePanel').innerHTML = `<span style="color:var(--muted)">${e.message}</span>`;
+      }
+    }
+
+    async function endGame(id) {
+      try {
+        await apiPost(`/games/${id}/end`);
+        showToast('Game ended', 'info');
+        loadActiveGame(); loadStats();
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    async function loadPending() {
+      try {
+        const [w, q2, c] = await Promise.all([
+          apiGet('/withdrawals?status=pending&per_page=3'),
+          apiGet('/questions?status=pending&per_page=3'),
+          apiGet('/companies?status=pending&per_page=3'),
+        ]);
+        let html = '';
+        if (w.total > 0) html += `<a href="withdrawals.html" class="alert-item orange">💸 <b>${w.total}</b> pending withdrawal${w.total > 1 ? 's' : ''}</a>`;
+        if (q2.total > 0) html += `<a href="questions.html" class="alert-item gold">❓ <b>${q2.total}</b> question${q2.total > 1 ? 's' : ''} need review</a>`;
+        if (c.total > 0) html += `<a href="companies.html" class="alert-item blue">🏢 <b>${c.total}</b> company application${c.total > 1 ? 's' : ''}</a>`;
+        if (!html) html = '<div style="color:var(--muted);text-align:center;padding:1rem">✅ All clear!</div>';
+        document.getElementById('pendingPanel').innerHTML = html;
+      } catch (e) {
+        document.getElementById('pendingPanel').innerHTML = `<span style="color:var(--muted)">${e.message}</span>`;
+      }
+    }
+
+    async function loadLeaderboard() {
+      try {
+        const r = await apiGet('/users?sort=total_earned&per_page=5');
+        const el = document.getElementById('leaderboardPanel');
+        if (!r.data?.length) { el.innerHTML = '<div style="color:var(--muted);text-align:center">No data yet</div>'; return; }
+        el.innerHTML = r.data.map((u, i) => `
+      <div class="list-row" style="display:flex;align-items:center;gap:.75rem;padding:.5rem 0;border-bottom:1px solid var(--border)">
+        <div style="font-size:1.2rem">${['🥇', '🥈', '🥉', '4️⃣', '5️⃣'][i] || i + 1}</div>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:.88rem">${u.first_name || ''} ${u.last_name || ''}</div>
+          <div style="font-size:.72rem;color:var(--muted)">@${u.telegram_username || '—'} · ${u.games_played || 0} games</div>
+        </div>
+        <div style="font-weight:700;color:var(--gold)">${fmt$(u.total_earned)}</div>
+      </div>`).join('');
+      } catch (e) {
+        document.getElementById('leaderboardPanel').innerHTML = `<span style="color:var(--muted)">${e.message}</span>`;
+      }
+    }
+
+    // ── Live DB status badge ──────────────────────────
+    async function checkDB() {
+      const dot = document.getElementById('dbDot');
+      const label = document.getElementById('dbLabel');
+      try {
+        const r = await fetch(API + '/health', { signal: AbortSignal.timeout(4000) });
+        const d = await r.json();
+        const ok = d.db === 'connected';
+        dot.className = 'db-dot ' + (ok ? 'ok' : 'err');
+        label.textContent = ok ? 'DB Connected' : 'DB Offline';
+      } catch {
+        dot.className = 'db-dot err';
+        label.textContent = 'API Offline';
+      }
+    }
+    checkDB();
+    setInterval(checkDB, 30000); // re-check every 30 s
+
+    loadAll();
+  </script>
+</body>
+
+</html>

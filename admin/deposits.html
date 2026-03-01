@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+    <title>SHAMO Admin — Company Deposits</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+        rel="stylesheet" />
+    <link rel="stylesheet" href="_shared.css" />
+</head>
+
+<body>
+    <div class="admin-layout">
+        <div id="sidebar" class="sidebar"></div>
+        <div class="main-area">
+            <div class="topbar">
+                <h1>Company Deposits <span class="subtitle">— Top-Up Requests</span></h1>
+                <div class="topbar-actions">
+                    <div class="search-input"><span>🔍</span><input type="text" id="searchD"
+                            placeholder="Company, Ref..." oninput="debouncedLoad()" /></div>
+                    <select id="dStatus" onchange="loadD(1)">
+                        <option value="">All Status</option>
+                        <option value="pending">Pending</option>
+                        <option value="approved">Approved</option>
+                        <option value="rejected">Rejected</option>
+                    </select>
+                    <button class="btn btn-ghost btn-sm" onclick="exportCSV()">⬇ CSV</button>
+                </div>
+            </div>
+            <div class="content">
+                <div id="pendingAlert"></div>
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Company</th>
+                            <th>Ref Number</th>
+                            <th>Amount (ETB)</th>
+                            <th>Status</th>
+                            <th>Date requested</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="dBody">
+                        <tr>
+                            <td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div class="pagination" id="dPagination"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Process Modal -->
+    <div class="modal-overlay" id="modalProcess">
+        <div class="modal" style="max-width:480px">
+            <div class="modal-header">
+                <h2 id="procTitle">Review Deposit</h2><button class="btn btn-ghost btn-icon"
+                    onclick="closeModal('modalProcess')">✕</button>
+            </div>
+            <div class="modal-body" id="procBody"></div>
+            <div class="modal-footer" id="procFooter"></div>
+        </div>
+    </div>
+
+    <script src="/api/public/env.js"></script>
+  <script src="_shared.js"></script>
+    <script>
+        let dPage = 1;
+        let dData = [];
+        buildSidebar('deposits');
+
+        async function loadD(page = dPage) {
+            dPage = page;
+            document.getElementById('dBody').innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td></tr>`;
+            try {
+                const search = document.getElementById('searchD').value;
+                const status = document.getElementById('dStatus').value;
+                const r = await apiGet(`/deposits?page=${page}&per_page=15&search=${encodeURIComponent(search)}&status=${status}`);
+                dData = r.data || [];
+
+                // Pending alert
+                if (!status || status === 'pending') {
+                    const pr = await apiGet('/deposits?status=pending&per_page=1');
+                    const el = document.getElementById('pendingAlert');
+                    el.innerHTML = pr.total > 0
+                        ? `<div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.3);border-radius:12px;padding:.9rem 1.25rem;margin-bottom:1rem;display:flex;align-items:center;gap:1rem">
+             <span style="font-size:1.3rem">🏢</span>
+             <span style="flex:1"><b>${pr.total} pending deposit${pr.total > 1 ? 's' : ''}</b> need approval</span>
+           </div>` : '';
+                }
+
+                if (!dData.length) { document.getElementById('dBody').innerHTML = `<tr><td colspan="6" style="text-align:center;padding:3rem;color:var(--muted)">No deposits found</td></tr>`; return; }
+                document.getElementById('dBody').innerHTML = dData.map(d => `
+      <tr>
+        <td>
+          <div style="font-weight:600">${d.company_name || '—'}</div>
+        </td>
+        <td style="font-size:.8rem;color:var(--muted)">${d.ref_number || '—'}</td>
+        <td style="font-weight:700;color:var(--gold)">${fmtN(d.amount_etb)} ETB</td>
+        <td>${badge(d.status)}</td>
+        <td style="font-size:.75rem;color:var(--muted)">${fmtTime(d.created_at)}</td>
+        <td>
+          <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+            <button class="btn btn-ghost btn-sm" onclick="viewD('${d.id}')">👁</button>
+            ${d.status === 'pending' ? `<button class="btn btn-green btn-sm" onclick="approveD('${d.id}')">✅</button><button class="btn btn-red btn-sm" onclick="rejectD('${d.id}')">✕</button>` : ''}
+          </div>
+        </td>
+      </tr>`).join('');
+                renderPagination('dPagination', r.page, r.total, r.per_page, 'loadD');
+            } catch (e) {
+                document.getElementById('dBody').innerHTML = `<tr><td colspan="6" style="text-align:center;padding:2rem;color:var(--muted)">❌ ${e.message}</td></tr>`;
+            }
+        }
+
+        async function viewD(id) {
+            try {
+                const d = dData.find(x => x.id === id); // quick lookup
+                if (!d) return;
+                document.getElementById('procTitle').textContent = `Deposit — ${fmtN(d.amount_etb)} ETB`;
+                document.getElementById('procBody').innerHTML = `
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:.5rem">
+        ${[
+                        ['Company', d.company_name],
+                        ['Reference', d.ref_number || '—'],
+                        ['Amount', fmtN(d.amount_etb) + ' ETB'],
+                        ['Status', badge(d.status)],
+                        ['Notes', d.notes || '—'],
+                        ['Date', fmtTime(d.created_at)],
+                        ['Processed', fmtTime(d.processed_at) || '—'],
+                        ['Rejection Reason', d.rejection_reason || '—'],
+                    ].map(([k, v]) => `<div style="background:var(--surface);border-radius:8px;padding:.6rem">
+          <div style="font-size:.7rem;color:var(--muted);margin-bottom:.2rem">${k}</div>
+          <div style="font-size:.85rem;font-weight:600">${v}</div>
+        </div>`).join('')}
+      </div>`;
+                document.getElementById('procFooter').innerHTML = `
+      <button class="btn btn-ghost" onclick="closeModal('modalProcess')">Close</button>
+      ${d.status === 'pending' ? `<button class="btn btn-red" onclick="rejectD('${d.id}');closeModal('modalProcess')">✕ Reject</button><button class="btn btn-green" onclick="approveD('${d.id}');closeModal('modalProcess')">✅ Approve</button>` : ''}
+    `;
+                openModal('modalProcess');
+            } catch (e) { showToast(e.message, 'error'); }
+        }
+
+        async function approveD(id) {
+            try { await apiPost(`/deposits/${id}/approve`); showToast('Deposit approved ✅', 'success'); loadD(); }
+            catch (e) { showToast(e.message, 'error'); }
+        }
+
+        async function rejectD(id) {
+            const reason = prompt('Rejection reason (optional):') || '';
+            try { await apiPost(`/deposits/${id}/reject`, { reason }); showToast('Deposit rejected', 'info'); loadD(); }
+            catch (e) { showToast(e.message, 'error'); }
+        }
+
+        function exportCSV() {
+            if (!dData.length) { showToast('No data to export', 'error'); return; }
+            const headers = ['id', 'company_name', 'amount_etb', 'status', 'ref_number', 'notes', 'created_at', 'processed_at'];
+            const rows = dData.map(d => headers.map(h => `"${(d[h] || '').toString().replace(/"/g, '""')}"`).join(','));
+            const csv = [headers.join(','), ...rows].join('\n');
+            const a = document.createElement('a');
+            a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+            a.download = `deposits_${new Date().toISOString().slice(0, 10)}.csv`;
+            a.click();
+            showToast('CSV exported', 'success');
+        }
+
+        let debT;
+        function debouncedLoad() { clearTimeout(debT); debT = setTimeout(() => loadD(1), 350); }
+
+        loadD(1);
+    </script>
+</body>
+
+</html>

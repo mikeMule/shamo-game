@@ -1,0 +1,897 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SHAMO Admin — QR Manager</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet">
+  <link rel="stylesheet" href="_shared.css">
+  <style>
+    /* ── QR-specific styles ── */
+    .qr-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+      gap: 14px;
+      margin-bottom: 20px;
+    }
+
+    .qr-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      overflow: hidden;
+      transition: border-color .2s;
+    }
+
+    .qr-card:hover {
+      border-color: rgba(232, 184, 75, .35);
+    }
+
+    .qr-canvas-wrap {
+      background: #fff;
+      padding: 12px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      position: relative;
+      cursor: pointer;
+    }
+
+    .qr-scan-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0, 0, 0, .72);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      opacity: 0;
+      transition: opacity .2s;
+      font-size: 11px;
+      color: #E8B84B;
+      letter-spacing: 1px;
+    }
+
+    .qr-card:hover .qr-scan-overlay {
+      opacity: 1;
+    }
+
+    .qr-card-body {
+      padding: 12px 14px;
+    }
+
+    .qr-game-name {
+      font-weight: 700;
+      font-size: .85rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      margin-bottom: 3px;
+    }
+
+    .qr-company {
+      font-size: .72rem;
+      color: var(--muted);
+      margin-bottom: 8px;
+    }
+
+    .qr-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      margin-bottom: 10px;
+    }
+
+    .qr-scans {
+      font-size: .7rem;
+      color: var(--muted);
+    }
+
+    .qr-actions {
+      display: flex;
+      gap: 6px;
+      padding: 10px 14px 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    /* Danger zone — detail modal */
+    .danger-zone {
+      margin-top: 16px;
+      padding-top: 14px;
+      border-top: 1px solid rgba(220, 38, 38, .25);
+      width: 100%;
+    }
+    .danger-zone-label {
+      font-size: .7rem;
+      letter-spacing: 1.5px;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-bottom: 10px;
+    }
+    .danger-zone-btns {
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+    }
+    .danger-zone-btns .btn {
+      flex: 1;
+      min-width: 100px;
+    }
+    .btn-delete {
+      background: #dc2626 !important;
+      border-color: #dc2626 !important;
+      color: white !important;
+    }
+    .btn-delete:hover:not(:disabled) {
+      background: #b91c1c !important;
+      border-color: #b91c1c !important;
+    }
+    .btn-delete.loading {
+      opacity: .7;
+      pointer-events: none;
+    }
+
+    /* Stats */
+    .qr-stats {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      margin-bottom: 20px;
+    }
+
+    .qs-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+    }
+
+    .qs-val {
+      font-family: 'Inter', sans-serif;
+      font-size: 1.7rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    .qs-lbl {
+      font-size: .68rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      margin-top: 4px;
+    }
+
+    /* Filter */
+    .filter-strip {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .filter-strip select,
+    .filter-strip input {
+      padding: 8px 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      color: var(--text);
+      font-size: .82rem;
+      font-family: inherit;
+      outline: none;
+      cursor: pointer;
+    }
+
+    .filter-strip select:focus,
+    .filter-strip input:focus {
+      border-color: rgba(232, 184, 75, .5);
+    }
+
+    /* Token box */
+    .token-box {
+      background: rgba(232, 184, 75, .06);
+      border: 1px solid rgba(232, 184, 75, .2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      font-size: .78rem;
+      color: #E8B84B;
+      word-break: break-all;
+      letter-spacing: 1px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+
+    .url-box {
+      background: rgba(255, 255, 255, .03);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      font-size: .75rem;
+      color: var(--muted);
+      word-break: break-all;
+      line-height: 1.6;
+      margin-bottom: 12px;
+    }
+
+    .qr-preview-wrap {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: #fff;
+      border-radius: 12px;
+      padding: 16px;
+      margin: 12px 0;
+    }
+
+    /* Scan table */
+    .scan-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: .82rem;
+    }
+
+    .scan-table th {
+      padding: 9px 12px;
+      text-align: left;
+      font-size: .65rem;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+    }
+
+    .scan-table td {
+      padding: 9px 12px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+
+    .scan-table tr:last-child td {
+      border-bottom: none;
+    }
+
+    .scan-table tr:hover td {
+      background: rgba(255, 255, 255, .02);
+    }
+
+    /* Download btn */
+    .dl-btn {
+      width: 100%;
+      padding: 11px;
+      border: none;
+      border-radius: 9px;
+      cursor: pointer;
+      background: linear-gradient(135deg, #E8B84B, #C8860A);
+      font-size: .82rem;
+      font-weight: 700;
+      color: #0A0800;
+      letter-spacing: .08em;
+      transition: transform .12s;
+    }
+
+    .dl-btn:hover {
+      transform: translateY(-1px);
+    }
+
+    /* Empty state */
+    .empty-state {
+      grid-column: 1/-1;
+      padding: 3rem;
+      text-align: center;
+      color: var(--muted);
+      font-size: .8rem;
+      letter-spacing: .05em;
+    }
+
+    .spin-ring {
+      display: inline-block;
+      width: 18px;
+      height: 18px;
+      border: 2px solid rgba(232, 184, 75, .15);
+      border-top-color: #E8B84B;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      vertical-align: middle;
+      margin-right: 6px;
+    }
+
+    @keyframes spin {
+      to {
+        transform: rotate(360deg);
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="admin-layout">
+    <div id="sidebar" class="sidebar"></div>
+
+    <div class="main-area">
+      <div class="topbar">
+        <h1>📲 QR Manager <span class="subtitle">— Game Entry Codes</span></h1>
+        <div class="topbar-actions">
+          <button class="btn btn-primary" onclick="openCreate()">＋ Generate New QR</button>
+        </div>
+      </div>
+
+      <div class="content">
+
+        <!-- STATS -->
+        <div class="qr-stats">
+          <div class="qs-card">
+            <div class="qs-val" id="stTotal" style="color:#E8B84B">0</div>
+            <div class="qs-lbl">Total QR Codes</div>
+          </div>
+          <div class="qs-card">
+            <div class="qs-val" id="stActive" style="color:#22C55E">0</div>
+            <div class="qs-lbl">Active</div>
+          </div>
+          <div class="qs-card">
+            <div class="qs-val" id="stScans" style="color:#3B82F6">0</div>
+            <div class="qs-lbl">Total Scans</div>
+          </div>
+          <div class="qs-card">
+            <div class="qs-val" id="stRevoked" style="color:#EF4444">0</div>
+            <div class="qs-lbl">Revoked</div>
+          </div>
+        </div>
+
+        <!-- FILTER & QR GRID -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;">
+          <h2 style="font-size:1.05rem;font-weight:700;">QR Codes</h2>
+        </div>
+
+        <div class="filter-strip">
+          <select id="fStatus" onchange="loadQRCodes()">
+            <option value="">All Status</option>
+            <option value="active">Active</option>
+            <option value="revoked">Revoked</option>
+            <option value="expired">Expired</option>
+          </select>
+          <select id="fGame" onchange="loadQRCodes()">
+            <option value="">All Games</option>
+          </select>
+          <select id="fCompany" onchange="loadQRCodes()">
+            <option value="">All Companies</option>
+          </select>
+          <button class="btn btn-ghost" onclick="loadQRCodes()" style="padding:8px 14px;">↺ Refresh</button>
+        </div>
+
+        <div class="qr-grid" id="qrGrid">
+          <div class="empty-state"><span class="spin-ring"></span>Loading QR codes…</div>
+        </div>
+
+        <!-- RECENT SCANS -->
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;margin-top:8px;">
+          <h2 style="font-size:1.05rem;font-weight:700;">📋 Recent Scans</h2>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <span id="scanCount" style="font-size:.72rem;color:var(--muted)"></span>
+            <button class="btn btn-ghost" onclick="loadScanLog()" style="font-size:.78rem;padding:6px 12px;">↺ Refresh</button>
+          </div>
+        </div>
+        <div class="panel" style="padding:0;margin-bottom:20px;">
+          <div style="overflow-x:auto;">
+            <table class="scan-table">
+              <thead>
+                <tr>
+                  <th>Player</th>
+                  <th>Telegram</th>
+                  <th>Phone</th>
+                  <th>QR Label</th>
+                  <th>Game</th>
+                  <th>Scanned At</th>
+                  <th>Status</th>
+                </tr>
+              </thead>
+              <tbody id="scanLogBody">
+                <tr>
+                  <td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">Loading scans…</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+      </div><!-- /content -->
+    </div><!-- /main-area -->
+  </div><!-- /admin-layout -->
+
+  <!-- ══ CREATE QR MODAL ══ -->
+  <div class="modal-overlay" id="createModal">
+    <div class="modal" style="max-width:580px;">
+      <div class="modal-header">
+        <h2>🎯 Generate QR Code</h2>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('createModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row">
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>Select Game *</label>
+            <select id="qrGame" onchange="onGameSelect()">
+              <option value="">— Choose a game —</option>
+            </select>
+          </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>Company (optional)</label>
+            <select id="qrCompany">
+              <option value="">— Platform game (no company) —</option>
+            </select>
+          </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>QR Label (printed on card)</label>
+            <input id="qrLabel" type="text" placeholder="e.g. Friday Night Game — Table 1">
+          </div>
+          <div class="form-group">
+            <label>Max Scans (0 = unlimited)</label>
+            <input id="qrMaxScans" type="number" value="0" min="0">
+          </div>
+          <div class="form-group">
+            <label>Expires After (hours, 0 = never)</label>
+            <input id="qrExpiry" type="number" value="24" min="0">
+          </div>
+          <div class="form-group" style="grid-column:1/-1;">
+            <label>Mini App Base URL *</label>
+            <input id="qrBaseUrl" type="url" placeholder="https://your-app.netlify.app/shamo-app.html">
+          </div>
+        </div>
+
+        <!-- Live Preview -->
+        <div id="qrPreviewSection" style="display:none;margin-top:4px;">
+          <div
+            style="font-size:.7rem;letter-spacing:.08em;text-transform:uppercase;color:var(--muted);margin-bottom:8px;">
+            Preview</div>
+          <div class="qr-preview-wrap"><img id="previewImage" width="180" height="180" src="" alt="QR Preview"
+              style="display:none;" /></div>
+          <div class="token-box">
+            <span id="previewToken">—</span>
+            <button class="btn btn-ghost btn-icon" onclick="copyToken()" title="Copy token">📋</button>
+          </div>
+          <div class="url-box" id="previewUrl">—</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('createModal')">Cancel</button>
+        <button class="btn btn-ghost" onclick="generatePreview()"
+          style="color:#E8B84B;border-color:rgba(232,184,75,.3);">👁 Preview</button>
+        <button class="btn btn-primary" id="saveQrBtn" onclick="saveQR()">💾 Save &amp; Download</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ DETAIL / DOWNLOAD MODAL ══ -->
+  <div class="modal-overlay" id="detailModal">
+    <div class="modal" style="max-width:420px;">
+      <div class="modal-header">
+        <h2 id="detailTitle">QR Code</h2>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('detailModal')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="qr-preview-wrap" id="detailQrWrap">
+          <img id="detailImage" width="240" height="240" src="" alt="QR Detail" />
+        </div>
+        <div style="text-align:center;font-weight:700;font-size:.9rem;margin-bottom:6px;" id="detailLabel"></div>
+        <div class="token-box">
+          <span id="detailToken" style="font-size:.72rem;"></span>
+          <button class="btn btn-ghost btn-icon" onclick="copyDetailToken()" title="Copy">📋</button>
+        </div>
+        <div class="url-box" id="detailUrl" style="font-size:.72rem;"></div>
+        <button class="dl-btn" onclick="downloadQR()">⬇ Download QR PNG</button>
+        <div class="danger-zone">
+          <div class="danger-zone-label">Danger zone</div>
+          <div class="danger-zone-btns">
+            <button class="btn btn-danger btn-sm" id="revokeBtn" title="Stop this QR from working (keeps record)">🚫 Revoke</button>
+            <button class="btn btn-delete btn-sm" id="deleteBtn" title="Permanently remove this QR code">🗑️ Delete</button>
+          </div>
+          <div style="font-size:.65rem;color:var(--muted);margin-top:8px;line-height:1.4;">Revoke = disable scanning. Delete = remove from database permanently.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('detailModal')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/api/public/env.js"></script>
+  <script src="_shared.js"></script>
+  <script>
+    // ── CONFIG ──────────────────────────────────────────────────────
+    const SUPABASE_URL = 'https://dlrvbxidyguagwpkslgc.supabase.co';
+    const SUPABASE_ANON_KEY = 'sb_publishable_oqHjqCIPbRg9o5D_mtUYQw_OJun_wwp';
+    const { createClient } = supabase;
+    const sb = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+    // ── SIDEBAR ─────────────────────────────────────────────────────
+    buildSidebar('qr');   // _shared.js will add QR Manager once we update sidebar nav
+
+    // ── TIME ────────────────────────────────────────────────────────
+    setInterval(() => {
+      const el = document.getElementById('tbTime');
+      if (el) el.textContent = new Date().toLocaleTimeString('en-GB');
+    }, 1000);
+
+    // ── TOKEN GENERATOR ─────────────────────────────────────────────
+    function generateToken() {
+      const arr = new Uint8Array(20);
+      crypto.getRandomValues(arr);
+      return 'SHQ_' + Array.from(arr).map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase().slice(0, 28);
+    }
+
+    // ── BUILD QR URL ────────────────────────────────────────────────
+    function buildQRUrl(token, gameId, companyId, baseUrl) {
+      const url = new URL(baseUrl);
+      url.searchParams.set('qr', token);
+      url.searchParams.set('g', gameId);
+      if (companyId) url.searchParams.set('c', companyId);
+      return url.toString();
+    }
+
+    // ── LOAD GAMES & COMPANIES ──────────────────────────────────────
+    let allGames = [], allCompanies = [];
+
+    async function loadSelectData() {
+      const { data: games } = await sb.from('games')
+        .select('id, title, status, game_date')
+        .in('status', ['active', 'scheduled', 'draft'])
+        .order('game_date', { ascending: false }).limit(50);
+
+      const { data: companies } = await sb.from('companies')
+        .select('id, name').eq('status', 'active').order('name');
+
+      allGames = games || [];
+      allCompanies = companies || [];
+
+      const gOpts = allGames.map(g => `<option value="${g.id}">${g.title} (${g.game_date || '—'})</option>`).join('');
+      document.getElementById('qrGame').innerHTML = '<option value="">— Choose a game —</option>' + gOpts;
+      document.getElementById('fGame').innerHTML = '<option value="">All Games</option>' + gOpts;
+
+      const cOpts = allCompanies.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+      document.getElementById('qrCompany').innerHTML = '<option value="">— Platform game (no company) —</option>' + cOpts;
+      document.getElementById('fCompany').innerHTML = '<option value="">All Companies</option>' + cOpts;
+
+      // Auto-select company from URL param and open create modal
+      const urlParams = new URLSearchParams(window.location.search);
+      const preCompany = urlParams.get('company');
+      if (preCompany) {
+        document.getElementById('fCompany').value = preCompany;
+        openCreate(preCompany);
+      }
+    }
+
+    function onGameSelect() {
+      const gid = document.getElementById('qrGame').value;
+      const game = allGames.find(g => g.id === gid);
+      if (game && !document.getElementById('qrLabel').value) {
+        document.getElementById('qrLabel').value = game.title + ' — Entry';
+      }
+    }
+
+    // ── GENERATE PREVIEW ────────────────────────────────────────────
+    let currentToken = '', currentUrl = '';
+
+    async function generatePreview() {
+      const gameId = document.getElementById('qrGame').value;
+      const baseUrl = document.getElementById('qrBaseUrl').value.trim();
+      if (!gameId) { showToast('Select a game first!', 'error'); return; }
+      if (!baseUrl) { showToast('Enter the Mini App URL!', 'error'); return; }
+
+      currentToken = generateToken();
+      const companyId = document.getElementById('qrCompany').value || null;
+      currentUrl = buildQRUrl(currentToken, gameId, companyId, baseUrl);
+
+      document.getElementById('previewToken').textContent = currentToken;
+      document.getElementById('previewUrl').textContent = currentUrl;
+      document.getElementById('qrPreviewSection').style.display = 'block';
+
+      // Load generic preview (frontend cant generate real QR before saving to API)
+      document.getElementById('previewImage').src = 'https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=' + encodeURIComponent(currentUrl);
+      document.getElementById('previewImage').style.display = 'block';
+
+      showToast('Preview ready — save to store QR code', 'info');
+    }
+
+    // ── SAVE QR TO SUPABASE ─────────────────────────────────────────
+    async function saveQR() {
+      const gameId = document.getElementById('qrGame').value;
+      const companyId = document.getElementById('qrCompany').value || null;
+      const label = document.getElementById('qrLabel').value.trim() || 'SHAMO QR';
+      const maxScans = parseInt(document.getElementById('qrMaxScans').value) || 0;
+      const expiryHrs = parseInt(document.getElementById('qrExpiry').value) || 0;
+      const baseUrl = document.getElementById('qrBaseUrl').value.trim();
+
+      if (!gameId) { showToast('Select a game!', 'error'); return; }
+      if (!baseUrl) { showToast('Enter Mini App URL!', 'error'); return; }
+
+      const btn = document.getElementById('saveQrBtn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+
+      try {
+        const payload = {
+          game_id: gameId,
+          company_id: companyId,
+          label: label,
+          max_scans: maxScans,
+          expiry_hours: expiryHrs,
+          base_url: baseUrl
+        };
+        const res = await apiFetch('/qr', { method: 'POST', body: payload });
+
+        btn.disabled = false; btn.textContent = '💾 Save & Download';
+        showToast('QR Code saved! ✅', 'success');
+        localStorage.setItem('shamo_base_url', baseUrl);
+        closeModal('createModal');
+        openDetail(res);
+        loadQRCodes();
+      } catch (err) {
+        btn.disabled = false; btn.textContent = '💾 Save & Download';
+        showToast('Error saving: ' + err.message, 'error');
+      }
+    }
+
+    // ── LOAD QR CODES ───────────────────────────────────────────────
+    async function loadQRCodes() {
+      document.getElementById('qrGrid').innerHTML = `<div class="empty-state"><span class="spin-ring"></span>Loading…</div>`;
+
+      const status = document.getElementById('fStatus').value;
+      const gameId = document.getElementById('fGame').value;
+      const companyId = document.getElementById('fCompany').value;
+
+      let qs = [];
+      if (status) qs.push('status=' + encodeURIComponent(status));
+      if (gameId) qs.push('game_id=' + encodeURIComponent(gameId));
+      if (companyId) qs.push('company_id=' + encodeURIComponent(companyId));
+      const qStr = qs.length ? '?' + qs.join('&') : '';
+
+      let list = [];
+      try {
+        list = await apiFetch('/qr' + qStr);
+      } catch (e) {
+        showToast('Load error: ' + e.message, 'error');
+        document.getElementById('qrGrid').innerHTML = '';
+        return;
+      }
+
+      // Stats
+      document.getElementById('stTotal').textContent = list.length;
+      document.getElementById('stActive').textContent = list.filter(q => q.status === 'active').length;
+      document.getElementById('stScans').textContent = list.reduce((a, q) => a + (q.scan_count || 0), 0);
+      document.getElementById('stRevoked').textContent = list.filter(q => q.status === 'revoked').length;
+
+      if (!list.length) {
+        document.getElementById('qrGrid').innerHTML = `<div class="empty-state">NO QR CODES YET — GENERATE ONE ABOVE</div>`;
+        return;
+      }
+
+      document.getElementById('qrGrid').innerHTML = list.map(qr => `
+  <div class="qr-card" id="qrc_${qr.id}">
+    <div class="qr-canvas-wrap" onclick="openDetail(${JSON.stringify(qr).replace(/"/g, '&quot;')})">
+      <img src="/api/qr/${qr.id}/image" width="160" height="160" alt="QR ${qr.id}" onerror="this.src='https://api.qrserver.com/v1/create-qr-code/?size=160x160&data=${encodeURIComponent(qr.qr_url)}'"/>
+      <div class="qr-scan-overlay">👁 View / Download</div>
+    </div>
+    <div class="qr-card-body">
+      <div class="qr-game-name">${qr.label || 'Unnamed'}</div>
+      <div class="qr-company">${qr.games?.title || '—'} · ${qr.companies?.name || 'Platform'}</div>
+      <div class="qr-meta">
+        ${statusBadge(qr.status)}
+        <span class="qr-scans">${qr.scan_count || 0} scans${qr.max_scans ? '/' + qr.max_scans : ''}</span>
+        ${qr.expires_at ? `<span class="qr-scans">⏰ ${new Date(qr.expires_at).toLocaleDateString('en-GB')}</span>` : ''}
+      </div>
+    </div>
+    <div class="qr-actions">
+      <button class="btn btn-primary btn-sm" style="flex:1;font-size:.72rem;" onclick="openDetail(${JSON.stringify(qr).replace(/"/g, '&quot;')})">⬇ Download</button>
+      ${qr.status === 'active'
+          ? `<button class="btn btn-danger btn-sm" style="font-size:.72rem; padding: 4px 8px;" title="Revoke" onclick="revokeQR('${qr.id}')">🚫</button>`
+          : `<span class="badge badge-muted" style="font-size:.65rem; display:flex; align-items:center;">Revoked</span>`}
+      <button class="btn btn-delete btn-sm" style="font-size:.72rem; padding: 4px 8px;" title="Permanently delete this QR code" onclick="deleteQR('${String(qr.id || '').replace(/'/g, "\\'")}')">🗑️</button>
+    </div>
+  </div>`).join('');
+    }
+
+    function statusBadge(s) {
+      if (s === 'active') return '<span class="badge badge-green">● Active</span>';
+      if (s === 'revoked') return '<span class="badge badge-red">✕ Revoked</span>';
+      if (s === 'expired') return '<span class="badge badge-muted">Expired</span>';
+      return `<span class="badge badge-muted">${s}</span>`;
+    }
+
+    // ── OPEN DETAIL MODAL ───────────────────────────────────────────
+    let _detailQR = null;
+
+    async function openDetail(qr) {
+      if (typeof qr === 'string') qr = JSON.parse(qr);
+      _detailQR = qr;
+      document.getElementById('detailTitle').textContent = qr.label || 'QR Code';
+      document.getElementById('detailLabel').textContent = qr.label || '—';
+      document.getElementById('detailToken').textContent = qr.token;
+      document.getElementById('detailUrl').textContent = qr.qr_url;
+
+      const img = document.getElementById('detailImage');
+      img.src = `/api/qr/${qr.id}/image`;
+
+      document.getElementById('revokeBtn').onclick = () => revokeQR(_detailQR?.id);
+      document.getElementById('deleteBtn').onclick = () => deleteQR(_detailQR?.id);
+      openModal('detailModal');
+    }
+
+    function copyDetailToken() { navigator.clipboard?.writeText(_detailQR?.token || '').then(() => showToast('Token copied!', 'success')); }
+    function copyToken() { navigator.clipboard?.writeText(currentToken || '').then(() => showToast('Token copied!', 'success')); }
+
+    // ── DOWNLOAD QR PNG ─────────────────────────────────────────────
+    function downloadQR() {
+      if (!_detailQR) { showToast('No QR selected', 'error'); return; }
+
+      // Fetch the actual image from the API endpoint
+      const img = new Image();
+      img.crossOrigin = "Anonymous";
+      img.onload = () => {
+        const out = document.createElement('canvas');
+        out.width = 400; out.height = 480;
+        const ctx = out.getContext('2d');
+
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, 400, 480);
+
+        // Ethiopian flag bar
+        ctx.fillStyle = '#E63946'; ctx.fillRect(0, 0, 134, 8);
+        ctx.fillStyle = '#E8B84B'; ctx.fillRect(134, 0, 133, 8);
+        ctx.fillStyle = '#22C55E'; ctx.fillRect(267, 0, 133, 8);
+
+        // Draw the loaded API image
+        ctx.drawImage(img, 70, 28, 260, 260);
+
+        // Branding
+        ctx.fillStyle = '#08070A';
+        ctx.font = 'bold 28px serif'; ctx.textAlign = 'center';
+        ctx.fillText('SHAMO ሻሞ', 200, 326);
+        ctx.font = '13px monospace'; ctx.fillStyle = '#444';
+        ctx.fillText(_detailQR?.label || 'Game Entry', 200, 350);
+        ctx.font = '9px monospace'; ctx.fillStyle = '#999';
+        ctx.fillText(_detailQR?.token || '', 200, 374);
+        ctx.font = '11px monospace'; ctx.fillStyle = '#C8860A';
+        ctx.fillText("Scan to enter tonight's game →", 200, 398);
+        ctx.font = '9px monospace'; ctx.fillStyle = '#bbb';
+        ctx.fillText('🇪🇹 Ethiopian Prize Game · @ShamoET_Bot', 200, 458);
+
+        const a = document.createElement('a');
+        a.download = `shamo-qr-${(_detailQR?.label || 'code').replace(/\\s+/g, '-')}-${Date.now()}.png`;
+        a.href = out.toDataURL('image/png');
+        a.click();
+        showToast('QR PNG downloaded! ⬇', 'success');
+      };
+      // Trigger load using our backend URL
+      img.src = `/api/qr/${_detailQR.id}/image`;
+    }
+
+    // ── REVOKE QR ───────────────────────────────────────────────────
+    async function revokeQR(id) {
+      if (!confirm('Revoke this QR code? It will stop working immediately.')) return;
+      try {
+        const res = await apiFetch(`/qr/${id}/revoke`, { method: 'POST' });
+        closeModal('detailModal');
+        showToast(res?.status === 'revoked' ? 'QR code revoked.' : 'Done.', 'info');
+        loadQRCodes();
+      } catch (e) {
+        const msg = e?.message || 'Request failed';
+        showToast(msg.includes('not found') ? 'QR code not found.' : 'Error revoking: ' + msg, 'error');
+      }
+    }
+
+    // ── DELETE QR ───────────────────────────────────────────────────
+    async function deleteQR(id) {
+      id = (id || '').toString().trim();
+      if (!id || id === 'undefined') {
+        showToast('Invalid QR code.', 'error');
+        return;
+      }
+      if (!confirm('Permanently delete this QR code? This cannot be undone.')) return;
+      const btn = document.getElementById('deleteBtn');
+      const origText = btn.textContent;
+      btn.textContent = 'Deleting…';
+      btn.classList.add('loading');
+      try {
+        const res = await apiFetch('/qr/delete', { method: 'POST', body: { id } });
+        closeModal('detailModal');
+        showToast(res?.message || 'QR code deleted.', 'success');
+        loadQRCodes();
+      } catch (e) {
+        const msg = (e?.message || 'Request failed').toString();
+        const friendly = msg.includes('not found') || msg.includes('404')
+          ? 'QR code not found or already deleted. List refreshed.'
+          : 'Error: ' + msg;
+        showToast(friendly, 'error');
+        btn.textContent = origText;
+        btn.classList.remove('loading');
+        loadQRCodes();
+      }
+    }
+
+    // ── SCAN LOG ────────────────────────────────────────────────────
+    async function loadScanLog() {
+      const body = document.getElementById('scanLogBody');
+      body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)"><span class="spin-ring"></span> Loading scans…</td></tr>`;
+      try {
+        const data = await apiGet('/qr/scans?limit=50');
+        const scans = Array.isArray(data) ? data : (data?.data || []);
+        const countEl = document.getElementById('scanCount');
+        if (countEl) countEl.textContent = scans.length + ' scan' + (scans.length !== 1 ? 's' : '');
+
+        if (!scans.length) {
+          body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted);font-size:.78rem;">📭 No scans recorded yet</td></tr>`;
+          return;
+        }
+
+        body.innerHTML = scans.map(s => {
+          const u = s.users || {};
+          const name = (u.first_name || '?') + (u.last_name ? ' ' + u.last_name : '');
+          const tgHandle = u.telegram_username ? '@' + u.telegram_username : (s.telegram_id ? 'TG:' + s.telegram_id : '—');
+          const phone = s.phone_number || u.phone_number || '—';
+          const qr = s.qr_codes || {};
+          const game = s.games || qr.games || {};
+          const dt = fmtTime(s.scanned_at);
+          const statusBadge = s.entry_status === 'entered'
+            ? '<span class="badge badge-green">✓ Entered</span>'
+            : s.entry_status === 'blocked'
+              ? '<span class="badge badge-red">✕ Blocked</span>'
+              : `<span class="badge badge-muted">${s.entry_status || '?'}</span>`;
+          return `<tr>
+            <td>
+              <div style="font-weight:600;font-size:.82rem">${name}</div>
+              ${s.user_id ? `<div style="font-size:.62rem;color:var(--muted);margin-top:1px" title="${s.user_id}">${s.user_id.slice(0,8)}…</div>` : ''}
+            </td>
+            <td style="font-size:.78rem;color:var(--muted)">${tgHandle}</td>
+            <td style="font-size:.78rem;color:var(--muted)">${phone}</td>
+            <td style="font-size:.78rem">${qr.label || s.qr_token?.slice(0,12) || '—'}</td>
+            <td style="font-size:.78rem;color:var(--muted)">${game.title || '—'}</td>
+            <td style="font-size:.73rem;color:var(--muted)">${dt}</td>
+            <td>${statusBadge}</td>
+          </tr>`;
+        }).join('');
+      } catch (e) {
+        body.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">❌ ${e.message || 'Failed to load scans'}</td></tr>`;
+      }
+    }
+
+    // ── OPEN CREATE ─────────────────────────────────────────────────
+    function openCreate(preCompanyId) {
+      document.getElementById('qrGame').value = '';
+      document.getElementById('qrCompany').value = preCompanyId || '';
+      document.getElementById('qrLabel').value = '';
+      document.getElementById('qrMaxScans').value = '0';
+      document.getElementById('qrExpiry').value = '24';
+      document.getElementById('qrBaseUrl').value = localStorage.getItem('shamo_base_url') || '';
+      document.getElementById('qrPreviewSection').style.display = 'none';
+      currentToken = ''; currentUrl = '';
+      openModal('createModal');
+    }
+
+    // Remember base URL
+    document.getElementById('qrBaseUrl')?.addEventListener('change', function () {
+      localStorage.setItem('shamo_base_url', this.value);
+    });
+
+    // ── REALTIME ────────────────────────────────────────────────────
+    sb.channel('admin-qr')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'qr_codes' }, () => loadQRCodes())
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'qr_scans' }, () => loadScanLog())
+      .subscribe();
+
+    window.addEventListener('beforeunload', () => sb.removeAllChannels());
+
+    // ── INIT ────────────────────────────────────────────────────────
+    async function init() {
+      await loadSelectData();
+      await loadQRCodes();
+      await loadScanLog();
+    }
+    init();
+  </script>
+</body>
+
+</html>

@@ -1,0 +1,943 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>SHAMO Admin — Questions</title>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap"
+    rel="stylesheet" />
+  <link rel="stylesheet" href="_shared.css" />
+  <style>
+    .opt-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+      margin: 8px 0;
+    }
+
+    .opt-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .opt-ltr {
+      width: 28px;
+      height: 28px;
+      border-radius: 50%;
+      background: var(--surface);
+      border: 1.5px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 800;
+      font-size: .75rem;
+      flex-shrink: 0;
+      cursor: pointer;
+    }
+
+    .opt-row input[type=radio] {
+      display: none;
+    }
+
+    .opt-row.selected .opt-ltr {
+      background: var(--green);
+      border-color: var(--green);
+      color: #000;
+    }
+
+    .opt-row input[type=text] {
+      flex: 1;
+    }
+
+    .q-games-badge {
+      display: inline-block;
+      background: rgba(232, 184, 75, .13);
+      color: var(--gold);
+      border-radius: 5px;
+      font-size: .68rem;
+      padding: 1px 7px;
+      margin: 1px 2px;
+      border: 1px solid rgba(232, 184, 75, .25);
+    }
+
+    .stat-row {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 18px;
+      flex-wrap: wrap;
+    }
+
+    .stat-chip {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 8px 16px;
+      font-size: .78rem;
+      color: var(--muted);
+    }
+
+    .stat-chip strong {
+      display: block;
+      font-size: 1.2rem;
+      color: var(--text);
+      font-weight: 800;
+    }
+
+    .stat-chip.gold strong {
+      color: var(--gold);
+    }
+
+    .game-filter-row {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+      margin-bottom: 4px;
+    }
+
+    .bulk-bar {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 10px 14px;
+      margin-bottom: 12px;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      font-size: .85rem;
+    }
+    .bulk-bar select { padding: 6px 10px; border-radius: 8px; }
+  </style>
+</head>
+
+<body>
+  <div class="admin-layout">
+    <div id="sidebar" class="sidebar"></div>
+    <div class="main-area">
+      <div class="topbar">
+        <h1>Questions <span class="subtitle">— Question Bank</span></h1>
+        <div class="topbar-actions">
+          <div class="search-input"><span>🔍</span><input type="text" id="searchQ" placeholder="Search questions…"
+              oninput="debouncedLoad()" /></div>
+          <select id="qGame" onchange="loadQ(1)">
+            <option value="">All Games</option>
+          </select>
+          <select id="qStatus" onchange="loadQ(1)">
+            <option value="">All Status</option>
+            <option value="approved">Approved</option>
+            <option value="pending">Pending</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <button class="btn btn-primary" onclick="openAddQ()">＋ Add Question</button>
+          <button class="btn btn-ghost" onclick="openImportModal()">📥 Import JSON</button>
+          <button class="btn btn-ghost" onclick="openCategoriesModal()" title="Manage categories">📂 Categories</button>
+        </div>
+      </div>
+
+      <div class="content">
+        <div class="stat-row">
+          <div class="stat-chip gold"><strong id="sTotal">—</strong>Total</div>
+          <div class="stat-chip"><strong id="sApproved">—</strong>Approved</div>
+          <div class="stat-chip"><strong id="sPending">—</strong>Pending</div>
+          <div class="stat-chip"><strong id="sRejected">—</strong>Rejected</div>
+        </div>
+
+        <div id="bulkBar" class="bulk-bar" style="display:none">
+          <span id="bulkCount">0</span> selected
+          <button type="button" class="btn btn-red btn-sm" onclick="bulkDelete()">🗑 Delete selected</button>
+          <select id="bulkGame" style="max-width:200px">
+            <option value="">— Assign to game —</option>
+          </select>
+          <button type="button" class="btn btn-primary btn-sm" onclick="bulkAssignGame()">Assign to game</button>
+          <button type="button" class="btn btn-ghost btn-sm" onclick="clearSelection()">Clear</button>
+        </div>
+
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th style="width:32px">
+                <input type="checkbox" id="selectAllQ" title="Select all on this page" onchange="toggleSelectAll(this.checked)" />
+              </th>
+              <th style="width:45%">Question</th>
+              <th>Games</th>
+              <th>Category</th>
+              <th>Status</th>
+              <th>Accuracy</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="qBody">
+            <tr>
+              <td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td>
+            </tr>
+          </tbody>
+        </table>
+        <div class="pagination" id="qPagination"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Add Question Modal ─────────────────────────────── -->
+  <div class="modal-overlay" id="modalAddQ">
+    <div class="modal" style="max-width:600px;width:100%">
+      <div class="modal-header">
+        <h2 id="addQTitle">＋ Add Question</h2>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('modalAddQ')">✕</button>
+      </div>
+      <div class="modal-body" style="padding-top:10px">
+        <input type="hidden" id="qEditId" />
+
+        <!-- STEP 1: Game -->
+        <div class="form-group" style="margin-bottom:10px">
+          <label style="font-size:.78rem;letter-spacing:1px;color:var(--gold)">① SELECT GAME (Required)</label>
+          <select id="aGame" style="font-weight:600;border-color:var(--gold);background:rgba(232,184,75,.06)">
+            <option value="">— Choose a game first —</option>
+          </select>
+        </div>
+
+        <!-- STEP 2: Question text -->
+        <div class="form-group" style="margin-bottom:8px">
+          <label style="font-size:.78rem;letter-spacing:1px">② QUESTION</label>
+          <textarea id="aText" placeholder="Type the question here…" rows="2" style="resize:vertical"></textarea>
+        </div>
+
+        <!-- STEP 3: Options grid -->
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;margin-bottom:6px">
+          <span style="font-size:.7rem;letter-spacing:1.5px;color:var(--muted)">③ OPTIONS — CLICK LETTER TO MARK CORRECT ANSWER</span>
+          <button type="button" class="btn btn-ghost btn-sm" id="addOptBtn" onclick="addOneOption()">＋ Add option</button>
+        </div>
+        <div class="opt-grid" id="optGrid">
+          <!-- Rendered by JS -->
+        </div>
+
+        <!-- STEP 4: Extras (collapsible-ish) -->
+        <div class="form-row" style="margin-top:8px">
+          <div class="form-group">
+            <label>Category</label>
+            <select id="aCatSelect" onchange="onCatSelect()" style="margin-bottom:4px">
+              <option value="">— Select category —</option>
+              <option value="__new__">＋ New category…</option>
+            </select>
+            <input id="aCat" type="text" placeholder="Or type a new category…" style="display:none" />
+          </div>
+          <div class="form-group" style="max-width:80px">
+            <label>Icon</label>
+            <input id="aIcon" type="text" value="🇪🇹" />
+          </div>
+        </div>
+        <div class="form-group">
+          <label>Explanation <span style="color:var(--muted);font-size:.73rem">(optional — shown after wrong
+              answer)</span></label>
+          <input id="aExplain" type="text" placeholder="Why is this the answer?" />
+        </div>
+        <div id="correctHint" style="font-size:.73rem;color:var(--muted);margin-top:4px;min-height:18px"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalAddQ')">Cancel</button>
+        <button class="btn btn-primary" id="addQBtn" onclick="submitQuestion()">✅ Add Question</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Import JSON Modal ─────────────────────────────── -->
+  <div class="modal-overlay" id="modalImport">
+    <div class="modal" style="max-width:660px;width:100%">
+      <div class="modal-header">
+        <h2>📥 Import Questions (JSON)</h2>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('modalImport')">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="form-row" style="gap:10px">
+          <div class="form-group" style="flex:2">
+            <label style="color:var(--gold)">① Game <span style="color:var(--red)">*</span></label>
+            <select id="importGame" style="width:100%" onchange="updateImportHint()">
+              <option value="">— Choose game —</option>
+            </select>
+          </div>
+          <div class="form-group" style="flex:1">
+            <label>Default category</label>
+            <select id="importCat">
+              <option value="">— None —</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:6px">
+          <label>② Paste JSON array</label>
+          <textarea id="importJson" rows="12" style="font-family:monospace;font-size:.78rem;resize:vertical;line-height:1.5" oninput="updateImportHint()"
+            placeholder='[
+  {
+    "question": "What is the capital of Ethiopia?",
+    "options": [
+      "Nairobi",
+      "Addis Ababa",
+      "Khartoum",
+      "Kampala"
+    ],
+    "answer": "Addis Ababa",
+    "category": "Geography"
+  }
+]'></textarea>
+        </div>
+
+        <div id="importSummary" style="padding:8px 12px;border-radius:8px;font-size:.82rem;margin-top:6px;display:none"></div>
+        <div id="importProgress" style="display:none;margin-top:8px">
+          <div style="height:6px;background:var(--surface);border-radius:4px;overflow:hidden">
+            <div id="importBar" style="height:100%;background:var(--green);width:0%;transition:width .2s"></div>
+          </div>
+          <div id="importProgressText" style="font-size:.72rem;color:var(--muted);margin-top:4px;text-align:center"></div>
+        </div>
+
+        <div style="margin-top:10px;padding:10px 12px;background:rgba(232,184,75,.05);border:1px solid rgba(232,184,75,.15);border-radius:8px;font-size:.72rem;color:var(--muted);line-height:1.6">
+          <b style="color:var(--gold)">Supported JSON formats:</b><br>
+          <b>Format 1 (simple):</b> <code>{"question": "...", "options": ["A","B","C","D"], "answer": "B text"}</code><br>
+          <b>Format 2 (detailed):</b> <code>{"question_text": "...", "options": [{"letter":"A","text":"...","is_correct":false}, ...]}</code><br>
+          Optional fields: <code>category</code>, <code>icon</code>, <code>explanation</code>. If no category, the default (above) is used.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalImport')">Cancel</button>
+        <button class="btn btn-primary" id="importBtn" onclick="doImport()">📥 Import to Game</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Review Modal ─────────────────────────────── -->
+  <div class="modal-overlay" id="modalReview">
+    <div class="modal" style="max-width:540px">
+      <div class="modal-header">
+        <h2>Review Question</h2><button class="btn btn-ghost btn-icon" onclick="closeModal('modalReview')">✕</button>
+      </div>
+      <div class="modal-body" id="reviewBody"></div>
+      <div class="modal-footer" id="reviewFooter"></div>
+    </div>
+  </div>
+
+  <!-- ── Categories Modal ─────────────────────────────── -->
+  <div class="modal-overlay" id="modalCategories">
+    <div class="modal" style="max-width:480px;width:100%">
+      <div class="modal-header">
+        <h2>📂 Question Categories</h2>
+        <button class="btn btn-ghost btn-icon" onclick="closeModal('modalCategories')">✕</button>
+      </div>
+      <div class="modal-body" style="padding-top:10px">
+        <div style="display:flex;gap:8px;margin-bottom:14px">
+          <input id="newCatInput" type="text" placeholder="New category name…" style="flex:1"
+            onkeydown="if(event.key==='Enter'){addCategory()}" />
+          <button class="btn btn-primary btn-sm" onclick="addCategory()">＋ Add</button>
+        </div>
+        <div id="catList" style="display:flex;flex-direction:column;gap:6px">
+          <div style="text-align:center;padding:1rem;color:var(--muted);font-size:.82rem">Loading categories…</div>
+        </div>
+        <div style="font-size:.7rem;color:var(--muted);margin-top:12px;line-height:1.5">
+          Categories are collected from all existing questions. Adding a new category here creates it for future use.
+          Categories with questions show their count.
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-ghost" onclick="closeModal('modalCategories')">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="/api/public/env.js"></script>
+  <script src="_shared.js"></script>
+  <script>
+    let qPage = 1;
+    let allGames = [];
+    let allCategories = [];
+    let selectedCorrect = null;
+    let optionLetters = ['A', 'B'];
+
+    buildSidebar('questions');
+    requireAuth();
+
+    function buildOptGrid(values = {}, letters = null) {
+      const L = letters ? letters.slice() : optionLetters.slice();
+      optionLetters = L;
+      selectedCorrect = values.correct || null;
+      document.getElementById('optGrid').innerHTML = L.map(l => `
+      <div class="opt-row${selectedCorrect === l ? ' selected' : ''}" id="optRow${l}" onclick="selectCorrect('${l}')">
+        <input type="radio" name="correct" value="${l}" id="radio${l}" ${selectedCorrect === l ? 'checked' : ''}>
+        <div class="opt-ltr" title="Mark as correct">${l}</div>
+        <input type="text" id="opt${l}" placeholder="Option ${l}…" value="${values[l] || ''}" />
+      </div>`).join('');
+      const addBtn = document.getElementById('addOptBtn');
+      if (addBtn) addBtn.style.display = L.length >= 4 ? 'none' : 'inline-flex';
+      updateCorrectHint();
+    }
+
+    function addOneOption() {
+      const next = ['A','B','C','D'].find(l => !optionLetters.includes(l));
+      if (!next) return;
+      const values = {};
+      optionLetters.forEach(l => { const el = document.getElementById('opt' + l); values[l] = el ? el.value : ''; });
+      values[next] = '';
+      buildOptGrid(values, optionLetters.concat(next));
+    }
+
+    function selectCorrect(l) {
+      selectedCorrect = l;
+      optionLetters.forEach(x => { const el = document.getElementById('optRow' + x); if (el) el.classList.toggle('selected', x === l); });
+      updateCorrectHint();
+    }
+
+    function updateCorrectHint() {
+      const hint = document.getElementById('correctHint');
+      if (selectedCorrect) {
+        const txt = document.getElementById('opt' + selectedCorrect)?.value || '';
+        hint.innerHTML = `✅ Correct answer: <strong>${selectedCorrect}</strong>${txt ? ' — ' + txt : ''}`;
+        hint.style.color = 'var(--green)';
+      } else {
+        hint.textContent = '⚠️ Click a letter button to mark the correct answer';
+        hint.style.color = 'var(--gold)';
+      }
+    }
+
+    async function loadGameOptions() {
+      try {
+        const r = await apiGet('/games?per_page=100');
+        allGames = r.data || [];
+        const gGameSel = document.getElementById('aGame');
+        const gFilter = document.getElementById('qGame');
+        const importSel = document.getElementById('importGame');
+        const bulkGameSel = document.getElementById('bulkGame');
+        allGames.forEach(g => {
+          const label = `${g.title} (${g.status})`;
+          gGameSel.insertAdjacentHTML('beforeend', `<option value="${g.id}">${label}</option>`);
+          gFilter.insertAdjacentHTML('beforeend', `<option value="${g.id}">${g.title}</option>`);
+          if (importSel) importSel.insertAdjacentHTML('beforeend', `<option value="${g.id}">${g.title}</option>`);
+          if (bulkGameSel) bulkGameSel.insertAdjacentHTML('beforeend', `<option value="${g.id}">${g.title}</option>`);
+        });
+      } catch (e) { /* non-critical */ }
+    }
+
+    // ── Load questions table ───────────────────────────────
+    async function loadQ(page = qPage) {
+      qPage = page;
+      const tbody = document.getElementById('qBody');
+      tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">⏳ Loading…</td></tr>`;
+      try {
+        const search = document.getElementById('searchQ').value;
+        const status = document.getElementById('qStatus').value;
+        const gameId = document.getElementById('qGame').value;
+        let url = `/questions?page=${page}&per_page=20&search=${encodeURIComponent(search)}&status=${status}`;
+        if (gameId) url += `&game_id=${gameId}`;
+        const r = await apiGet(url);
+        const questions = r.data || [];
+
+        // Stats
+        document.getElementById('sTotal').textContent = r.total || questions.length;
+        document.getElementById('sApproved').textContent = questions.filter(q => q.status === 'approved').length;
+        document.getElementById('sPending').textContent = questions.filter(q => q.status === 'pending').length;
+        document.getElementById('sRejected').textContent = questions.filter(q => q.status === 'rejected').length;
+
+        if (!questions.length) {
+          tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:3rem;color:var(--muted)">📭 No questions found</td></tr>`;
+          return;
+        }
+
+        selectedQuestionIds = new Set(selectedQuestionIds);
+        tbody.innerHTML = questions.map(q => {
+          const acc = q.times_shown > 0 ? Math.round(q.times_correct / q.times_shown * 100) : 0;
+          const gameBadges = (q.games || []).map(g => `<span class="q-games-badge">🎮 ${g}</span>`).join('') || '<span style="color:var(--muted);font-size:.7rem">—</span>';
+          const checked = selectedQuestionIds.has(q.id) ? 'checked' : '';
+          return `<tr>
+          <td style="vertical-align:middle"><input type="checkbox" class="q-cb" data-qid="${q.id}" ${checked} onchange="onQuestionCheck()" /></td>
+          <td style="max-width:300px">
+            <div style="font-weight:600;font-size:.87rem;line-height:1.4">${q.icon || ''} ${q.question_text}</div>
+            ${(q.options || []).find(o => o.is_correct) ? `<div style="font-size:.68rem;color:var(--green);margin-top:2px">✅ ${(q.options || []).find(o => o.is_correct)?.option_text || ''}</div>` : ''}
+          </td>
+          <td style="font-size:.75rem">${gameBadges}</td>
+          <td style="font-size:.78rem;color:var(--muted)">${q.category || '—'}</td>
+          <td>${badge(q.status)}</td>
+          <td>
+            <div style="display:flex;align-items:center;gap:.4rem">
+              <div class="bar-track" style="width:50px;height:5px"><div class="bar-fill" style="width:${acc}%;background:${acc > 60 ? 'var(--green)' : acc > 30 ? 'var(--gold)' : 'var(--red)'}"></div></div>
+              <span style="font-size:.72rem">${acc}%</span>
+            </div>
+          </td>
+          <td>
+            <div style="display:flex;gap:.3rem;flex-wrap:wrap">
+              <button class="btn btn-ghost btn-sm" onclick="reviewQ('${q.id}')">👁</button>
+              <button class="btn btn-ghost btn-sm" onclick="openEditQ('${q.id}')">✏️ Edit</button>
+              ${q.status === 'pending' ? `<button class="btn btn-green btn-sm" onclick="approveQ('${q.id}')">✅</button><button class="btn btn-red btn-sm" onclick="rejectQ('${q.id}')">✕</button>` : ''}
+              <button class="btn btn-red btn-sm" onclick="deleteQ('${q.id}')">🗑 Delete</button>
+            </div>
+          </td>
+        </tr>`;
+        }).join('');
+        document.getElementById('selectAllQ').checked = questions.length > 0 && questions.every(q => selectedQuestionIds.has(q.id));
+        updateBulkBar();
+        renderPagination('qPagination', r.page, r.total, r.per_page, 'loadQ');
+      } catch (e) {
+        document.getElementById('qBody').innerHTML = `<tr><td colspan="7" style="text-align:center;padding:2rem;color:var(--muted)">❌ ${e.message}</td></tr>`;
+      }
+    }
+
+    let selectedQuestionIds = new Set();
+
+    function onQuestionCheck() {
+      selectedQuestionIds.clear();
+      document.querySelectorAll('.q-cb:checked').forEach(cb => selectedQuestionIds.add(cb.getAttribute('data-qid')));
+      updateBulkBar();
+      const total = document.querySelectorAll('.q-cb').length;
+      const checked = document.querySelectorAll('.q-cb:checked').length;
+      document.getElementById('selectAllQ').checked = total > 0 && total === checked;
+    }
+
+    function toggleSelectAll(checked) {
+      document.querySelectorAll('.q-cb').forEach(cb => { cb.checked = checked; });
+      selectedQuestionIds.clear();
+      if (checked) document.querySelectorAll('.q-cb').forEach(cb => selectedQuestionIds.add(cb.getAttribute('data-qid')));
+      updateBulkBar();
+    }
+
+    function clearSelection() {
+      selectedQuestionIds.clear();
+      document.getElementById('selectAllQ').checked = false;
+      document.querySelectorAll('.q-cb').forEach(cb => { cb.checked = false; });
+      updateBulkBar();
+    }
+
+    function updateBulkBar() {
+      const n = selectedQuestionIds.size;
+      const bar = document.getElementById('bulkBar');
+      if (!bar) return;
+      bar.style.display = n ? 'flex' : 'none';
+      document.getElementById('bulkCount').textContent = n;
+    }
+
+    async function bulkDelete() {
+      const ids = Array.from(selectedQuestionIds);
+      if (!ids.length) { showToast('Select at least one question', 'error'); return; }
+      if (!confirm(`Delete ${ids.length} question(s) permanently?`)) return;
+      try {
+        await apiPost('/questions/bulk-delete', { ids });
+        showToast('Deleted ' + ids.length + ' question(s)', 'success');
+        clearSelection();
+        loadQ(qPage || 1);
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    async function bulkAssignGame() {
+      const ids = Array.from(selectedQuestionIds);
+      const gameId = document.getElementById('bulkGame').value;
+      if (!ids.length) { showToast('Select at least one question', 'error'); return; }
+      if (!gameId) { showToast('Select a game to assign to', 'error'); return; }
+      try {
+        const r = await apiPost('/questions/bulk-assign-game', { question_ids: ids, game_id: gameId });
+        showToast(r.message || 'Assigned to game', 'success');
+        clearSelection();
+        loadQ(qPage || 1);
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    // ── Open Add modal ─────────────────────────────────────
+    function openAddQ() {
+      document.getElementById('addQTitle').textContent = '＋ Add Question';
+      document.getElementById('qEditId').value = '';
+      document.getElementById('aText').value = '';
+      document.getElementById('aIcon').value = '🇪🇹';
+      document.getElementById('aExplain').value = '';
+      document.getElementById('addQBtn').textContent = '✅ Add Question';
+      const filterGame = document.getElementById('qGame').value;
+      document.getElementById('aGame').value = filterGame || '';
+      populateCatDropdown('');
+      optionLetters = ['A', 'B'];
+      buildOptGrid();
+      openModal('modalAddQ');
+    }
+
+    async function openEditQ(id) {
+      try {
+        const q = await apiGet('/questions/' + id);
+        document.getElementById('addQTitle').textContent = '✏️ Edit Question';
+        document.getElementById('qEditId').value = q.id;
+        document.getElementById('aText').value = q.question_text || '';
+        populateCatDropdown(q.category || '');
+        document.getElementById('aIcon').value = q.icon || '🇪🇹';
+        document.getElementById('aExplain').value = q.explanation || '';
+        document.getElementById('addQBtn').textContent = '✅ Save changes';
+        const opts = (q.options || []).sort((a, b) => (a.option_letter || '').localeCompare(b.option_letter || ''));
+        const letters = opts.length ? opts.map(o => o.option_letter) : ['A', 'B'];
+        const correctOpt = opts.find(o => o.is_correct);
+        const values = {};
+        letters.forEach((l, i) => { values[l] = (opts[i] && opts[i].option_text) || ''; });
+        values.correct = correctOpt ? correctOpt.option_letter : null;
+        optionLetters = letters.length >= 4 ? ['A','B','C','D'] : letters.slice();
+        buildOptGrid(values, optionLetters);
+        const firstGameTitle = (q.games && q.games[0]);
+        document.getElementById('aGame').value = firstGameTitle ? (allGames.find(g => g.title === firstGameTitle)?.id || '') : '';
+        openModal('modalAddQ');
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    function openImportModal() {
+      document.getElementById('importGame').value = document.getElementById('qGame').value || '';
+      document.getElementById('importJson').value = '';
+      // Populate category dropdown in import modal
+      const catSel = document.getElementById('importCat');
+      catSel.innerHTML = '<option value="">— None (use per-question) —</option>';
+      allCategories.forEach(c => catSel.insertAdjacentHTML('beforeend', `<option value="${c}">${c}</option>`));
+      document.getElementById('importSummary').style.display = 'none';
+      document.getElementById('importProgress').style.display = 'none';
+      updateImportHint();
+      openModal('modalImport');
+    }
+
+    function updateImportHint() {
+      const gameId = document.getElementById('importGame').value;
+      const raw = (document.getElementById('importJson') || {}).value || '';
+      const el = document.getElementById('importSummary');
+      if (!el) return;
+
+      let arr = [], parseErr = '';
+      try { arr = JSON.parse(raw.trim() || '[]'); } catch (e) { parseErr = e.message; }
+      const count = Array.isArray(arr) ? arr.length : 0;
+      const gameName = allGames.find(g => g.id === gameId)?.title || '';
+
+      if (parseErr && raw.trim()) {
+        el.style.display = 'block';
+        el.style.background = 'rgba(239,68,68,.1)';
+        el.style.border = '1px solid rgba(239,68,68,.3)';
+        el.style.color = 'var(--red)';
+        el.innerHTML = '❌ Invalid JSON: ' + parseErr;
+      } else if (!gameId && count > 0) {
+        el.style.display = 'block';
+        el.style.background = 'rgba(249,115,22,.08)';
+        el.style.border = '1px solid rgba(249,115,22,.25)';
+        el.style.color = '#F97316';
+        el.innerHTML = '⚠ Select a game first — all questions will be added to it.';
+      } else if (gameId && count > 0) {
+        const noOpts = arr.filter(q => !(q.options || q.answers || []).length).length;
+        const noCorrect = arr.filter(q => {
+          const o = q.options || q.answers || [];
+          if (!o.length) return false;
+          const ans = (q.answer || q.correct_answer || '').trim().toLowerCase();
+          if (ans) return false; // has answer field = will match
+          if (typeof o[0] === 'string') return true; // string array + no answer = no correct
+          return !o.some(x => x.is_correct);
+        }).length;
+        let warnings = [];
+        if (noOpts) warnings.push(`${noOpts} without options`);
+        if (noCorrect) warnings.push(`${noCorrect} without correct answer`);
+        el.style.display = 'block';
+        el.style.background = 'rgba(34,197,94,.08)';
+        el.style.border = '1px solid rgba(34,197,94,.25)';
+        el.style.color = 'var(--green)';
+        el.innerHTML = `✅ Ready: <b>${count}</b> question(s) → <b>${gameName}</b>` +
+          (warnings.length ? `<br><span style="color:var(--gold);font-size:.75rem">⚠ ${warnings.join(', ')}</span>` : '');
+      } else {
+        el.style.display = 'none';
+      }
+    }
+
+    async function doImport() {
+      const gameId = document.getElementById('importGame').value;
+      const defaultCat = document.getElementById('importCat').value || null;
+      const raw = document.getElementById('importJson').value.trim();
+
+      if (!gameId) { showToast('Select a game first', 'error'); return; }
+      if (!raw) { showToast('Paste JSON data', 'error'); return; }
+
+      let arr;
+      try { arr = JSON.parse(raw); }
+      catch (e) { showToast('Invalid JSON: ' + e.message, 'error'); return; }
+      if (!Array.isArray(arr) || !arr.length) { showToast('JSON must be a non-empty array', 'error'); return; }
+
+      const btn = document.getElementById('importBtn');
+      btn.disabled = true; btn.textContent = 'Importing…';
+      const progEl = document.getElementById('importProgress');
+      const barEl = document.getElementById('importBar');
+      const progText = document.getElementById('importProgressText');
+      progEl.style.display = 'block';
+
+      let ok = 0, fail = 0, errors = [];
+      const total = arr.length;
+      const letters = ['A','B','C','D'];
+
+      for (let i = 0; i < total; i++) {
+        const item = arr[i];
+        const pct = Math.round(((i + 1) / total) * 100);
+        barEl.style.width = pct + '%';
+        progText.textContent = `${i + 1} / ${total} (${ok} ok, ${fail} failed)`;
+
+        const text = (item.question_text || item.question || '').trim();
+        if (!text) { fail++; errors.push(`#${i+1}: missing question_text`); continue; }
+
+        const rawOpts = item.options || item.answers || [];
+        if (!rawOpts.length) { fail++; errors.push(`#${i+1}: no options`); continue; }
+
+        // Normalize: support both formats
+        // Format 1: ["Option A", "Option B", ...] + answer: "Option B"
+        // Format 2: [{letter:"A", text:"...", is_correct:true}, ...]
+        const answerText = (item.answer || item.correct_answer || '').trim().toLowerCase();
+        const opts = rawOpts.slice(0, 4).map((o, idx) => {
+          if (typeof o === 'string') {
+            // Plain string array format
+            return {
+              letter: letters[idx] || letters[0],
+              text: o.trim(),
+              is_correct: answerText ? o.trim().toLowerCase() === answerText : false,
+            };
+          }
+          // Object format
+          return {
+            letter: o.letter || letters[idx] || letters[0],
+            text: String(o.text || o.option_text || '').trim() || 'Option ' + (letters[idx] || '?'),
+            is_correct: !!o.is_correct || (answerText && (o.text || o.option_text || '').trim().toLowerCase() === answerText),
+          };
+        });
+
+        if (!opts.some(o => o.is_correct)) {
+          // Last resort: if answer is an index (e.g. answer: 1)
+          const ansIdx = parseInt(item.answer ?? item.correct_answer ?? -1);
+          if (ansIdx >= 0 && ansIdx < opts.length) {
+            opts[ansIdx].is_correct = true;
+          } else {
+            opts[0].is_correct = true;
+          }
+        }
+
+        const payload = {
+          question_text: text,
+          game_id: gameId,
+          category: item.category || defaultCat,
+          icon: item.icon || '🇪🇹',
+          explanation: item.explanation || null,
+          options: opts,
+        };
+
+        try {
+          await apiFetch('/questions', { method: 'POST', body: payload });
+          ok++;
+        } catch (e) {
+          fail++;
+          errors.push(`#${i+1}: ${e.message || 'API error'}`);
+        }
+      }
+
+      barEl.style.width = '100%';
+      progText.textContent = `Done — ${ok} imported, ${fail} failed`;
+      btn.disabled = false; btn.textContent = '📥 Import to Game';
+
+      if (errors.length) {
+        console.warn('Import errors:', errors);
+      }
+
+      setTimeout(() => {
+        closeModal('modalImport');
+        loadQ(1);
+        loadCategories().then(() => populateCatDropdown(''));
+        if (fail === 0) {
+          showToast(`✅ Imported ${ok} question(s) to game`, 'success');
+        } else {
+          showToast(`Imported ${ok}, failed ${fail}. Check console for details.`, 'info', 5000);
+        }
+      }, 800);
+    }
+
+    // ── Submit question ────────────────────────────────────
+    async function submitQuestion() {
+      const editId = document.getElementById('qEditId').value.trim();
+      const gameId = document.getElementById('aGame').value;
+      const text = document.getElementById('aText').value.trim();
+      if (!editId && !gameId) { showToast('Select a game first!', 'error'); return; }
+      if (!text) { showToast('Question text is required', 'error'); return; }
+      if (!selectedCorrect) { showToast('Mark the correct answer by clicking its letter', 'error'); return; }
+
+      const options = optionLetters.map(l => ({
+        letter: l,
+        text: (document.getElementById('opt' + l) && document.getElementById('opt' + l).value.trim()) || `Option ${l}`,
+        is_correct: l === selectedCorrect,
+      }));
+
+      if (options.every(o => !o.text || o.text.startsWith('Option '))) {
+        showToast('Please fill in the answer options', 'error'); return;
+      }
+
+      const btn = document.getElementById('addQBtn');
+      btn.disabled = true; btn.textContent = 'Saving…';
+      try {
+        const category = getSelectedCategory();
+        if (editId) {
+          const payload = {
+            question_text: text,
+            category,
+            icon: document.getElementById('aIcon').value || '🇪🇹',
+            explanation: document.getElementById('aExplain').value || null,
+            options,
+          };
+          await apiPut('/questions/' + editId, payload);
+          showToast('Question updated ✅', 'success');
+        } else {
+          const payload = {
+            question_text: text,
+            game_id: gameId,
+            category,
+            icon: document.getElementById('aIcon').value || '🇪🇹',
+            explanation: document.getElementById('aExplain').value || null,
+            options,
+          };
+          await apiPost('/questions', payload);
+          showToast('Question added & linked to game ✅', 'success');
+        }
+        closeModal('modalAddQ');
+        loadQ(qPage || 1);
+      } catch (e) { showToast('Error: ' + e.message, 'error'); }
+      finally { btn.disabled = false; btn.textContent = editId ? '✅ Save changes' : '✅ Add Question'; }
+    }
+
+    // ── Review modal ───────────────────────────────────────
+    async function reviewQ(id) {
+      try {
+        const q = await apiGet(`/questions/${id}`);
+        const opts = q.options || [];
+        document.getElementById('reviewBody').innerHTML = `
+        <div style="font-size:1.05rem;font-weight:700;margin-bottom:.5rem">${q.icon || ''} ${q.question_text}</div>
+        <div style="font-size:.78rem;color:var(--muted);margin-bottom:.75rem">${q.category || ''} · Added ${fmtDate(q.created_at)}</div>
+        ${opts.map(o => `<div style="padding:.4rem .6rem;border-radius:8px;margin-bottom:.3rem;font-size:.87rem;background:${o.is_correct ? 'rgba(34,197,94,.15)' : 'var(--surface)'};border:1px solid ${o.is_correct ? 'rgba(34,197,94,.3)' : 'var(--border)'}">
+          <b>${o.option_letter}.</b> ${o.option_text} ${o.is_correct ? '✅' : ''}
+        </div>`).join('')}
+        ${q.explanation ? `<div style="margin-top:.75rem;padding:.6rem;background:rgba(59,130,246,.1);border-radius:8px;font-size:.82rem;color:#93C5FD">💡 ${q.explanation}</div>` : ''}`;
+        document.getElementById('reviewFooter').innerHTML = `
+        <button class="btn btn-ghost" onclick="closeModal('modalReview')">Close</button>
+        <button class="btn btn-red btn-sm" onclick="rejectQ('${id}');closeModal('modalReview')">✕ Reject</button>
+        <button class="btn btn-green" onclick="approveQ('${id}');closeModal('modalReview')">✅ Approve</button>`;
+        openModal('modalReview');
+      } catch (e) { showToast(e.message, 'error'); }
+    }
+
+    async function approveQ(id) {
+      try { await apiPost(`/questions/${id}/approve`); showToast('Approved ✅', 'success'); loadQ(); }
+      catch (e) { showToast(e.message, 'error'); }
+    }
+
+    async function rejectQ(id) {
+      const reason = prompt('Reject reason (optional):') || '';
+      try { await apiPost(`/questions/${id}/reject`, { reason }); showToast('Rejected', 'info'); loadQ(); }
+      catch (e) { showToast(e.message, 'error'); }
+    }
+
+    async function deleteQ(id) {
+      if (!confirm('Delete this question permanently?')) return;
+      try { await apiDelete(`/questions/${id}`); showToast('Deleted', 'info'); loadQ(); }
+      catch (e) { showToast(e.message, 'error'); }
+    }
+
+    let debT;
+    function debouncedLoad() { clearTimeout(debT); debT = setTimeout(() => loadQ(1), 350); }
+
+    // ── Categories ─────────────────────────────────────────
+    async function loadCategories() {
+      try {
+        const r = await apiGet('/questions?per_page=500&status=');
+        const qs = r.data || [];
+        const catCount = {};
+        qs.forEach(q => {
+          const c = (q.category || '').trim();
+          if (c) catCount[c] = (catCount[c] || 0) + 1;
+        });
+        // Also include custom categories from localStorage
+        const custom = JSON.parse(localStorage.getItem('shamo_categories') || '[]');
+        custom.forEach(c => { if (c && !catCount[c]) catCount[c] = 0; });
+        allCategories = Object.keys(catCount).sort((a, b) => a.localeCompare(b));
+        return catCount;
+      } catch (e) { return {}; }
+    }
+
+    function populateCatDropdown(selectedVal) {
+      const sel = document.getElementById('aCatSelect');
+      const inp = document.getElementById('aCat');
+      sel.innerHTML = '<option value="">— Select category —</option>';
+      allCategories.forEach(c => {
+        sel.insertAdjacentHTML('beforeend', `<option value="${c}">${c}</option>`);
+      });
+      sel.insertAdjacentHTML('beforeend', '<option value="__new__">＋ New category…</option>');
+      if (selectedVal && allCategories.includes(selectedVal)) {
+        sel.value = selectedVal;
+        inp.style.display = 'none';
+      } else if (selectedVal) {
+        sel.value = '__new__';
+        inp.style.display = '';
+        inp.value = selectedVal;
+      } else {
+        sel.value = '';
+        inp.style.display = 'none';
+      }
+    }
+
+    function onCatSelect() {
+      const sel = document.getElementById('aCatSelect');
+      const inp = document.getElementById('aCat');
+      if (sel.value === '__new__') {
+        inp.style.display = '';
+        inp.value = '';
+        inp.focus();
+      } else {
+        inp.style.display = 'none';
+        inp.value = sel.value;
+      }
+    }
+
+    function getSelectedCategory() {
+      const sel = document.getElementById('aCatSelect');
+      if (sel.value === '__new__' || sel.value === '') {
+        return document.getElementById('aCat').value.trim() || null;
+      }
+      return sel.value || null;
+    }
+
+    async function openCategoriesModal() {
+      const catCount = await loadCategories();
+      const listEl = document.getElementById('catList');
+      if (!allCategories.length) {
+        listEl.innerHTML = '<div style="text-align:center;padding:1.5rem;color:var(--muted);font-size:.82rem">📭 No categories yet — add one above or create questions with categories.</div>';
+      } else {
+        listEl.innerHTML = allCategories.map(c => {
+          const n = catCount[c] || 0;
+          return `<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;">
+            <div style="display:flex;align-items:center;gap:8px">
+              <span style="font-weight:600;font-size:.88rem">${c}</span>
+              <span class="badge badge-muted" style="font-size:.68rem">${n} question${n !== 1 ? 's' : ''}</span>
+            </div>
+            <button class="btn btn-ghost btn-sm" style="font-size:.7rem;padding:3px 8px" onclick="useCategoryInAdd('${c.replace(/'/g, "\\'")}')">Use</button>
+          </div>`;
+        }).join('');
+      }
+      openModal('modalCategories');
+    }
+
+    function addCategory() {
+      const inp = document.getElementById('newCatInput');
+      const name = (inp.value || '').trim();
+      if (!name) { showToast('Enter a category name', 'error'); return; }
+      if (allCategories.includes(name)) { showToast('Category already exists', 'info'); inp.value = ''; return; }
+      allCategories.push(name);
+      allCategories.sort((a, b) => a.localeCompare(b));
+      // Persist custom categories in localStorage
+      const custom = JSON.parse(localStorage.getItem('shamo_categories') || '[]');
+      if (!custom.includes(name)) { custom.push(name); localStorage.setItem('shamo_categories', JSON.stringify(custom)); }
+      inp.value = '';
+      showToast('Category "' + name + '" added', 'success');
+      openCategoriesModal(); // refresh list
+    }
+
+    function useCategoryInAdd(cat) {
+      closeModal('modalCategories');
+      populateCatDropdown(cat);
+      openModal('modalAddQ');
+    }
+
+    // ── Boot ───────────────────────────────────────────────
+    loadGameOptions();
+    loadCategories().then(() => populateCatDropdown(''));
+    loadQ(1);
+  </script>
+</body>
+
+</html>
