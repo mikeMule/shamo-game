@@ -267,6 +267,17 @@ body {
   padding: 1.5rem;
 }
 
+/* Admin footer — appears on all dashboard pages */
+.admin-footer {
+  flex-shrink: 0;
+  padding: 0.75rem 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--muted);
+  text-align: center;
+  letter-spacing: 0.02em;
+}
+
 /* STAT CARDS */
 .stats-grid {
   display: grid;

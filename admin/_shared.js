@@ -342,6 +342,16 @@ async function buildSidebar(activePage) {
       </div>
     </div>`;
 
+  // Inject admin footer (Dev By Michael) into main area if not present
+  const main = document.querySelector('.main-area');
+  if (main && !document.getElementById('admin-app-footer')) {
+    const foot = document.createElement('footer');
+    foot.id = 'admin-app-footer';
+    foot.className = 'admin-footer';
+    foot.innerHTML = 'Dev By Michael';
+    main.appendChild(foot);
+  }
+
   // Load badges
   try {
     const stats = await getStats();

@@ -63,10 +63,3 @@ config.json
 ._*
 ehthumbs.db
 desktop.ini
-
-# Keep these (examples are safe)
-!.gitignore
-!README.md
-!requirements.txt
-!ecosystem.config.js
-!start_services.ps1
